@@ -29,27 +29,64 @@ ruleset() { # $1 name, $2 JSON body
 
 # --- 1. While still private -------------------------------------------------
 
+# Every step reads the setting first and only writes when it differs: a
+# re-run must not fail on a setting that is already right (GitHub refuses
+# some writes once later settings, such as the workflow-execution policy,
+# exist).
+is_set() { # is_set <path> <jq expression that prints true when the setting is right>
+  [ "$(gh api "$1" --jq "$2" 2>/dev/null)" = true ]
+}
+skip() { echo "already set"; }
+
 step "Workflow token: read-only by default; Actions may not create or approve PRs"
-gh api -X PUT "$R/actions/permissions/workflow" \
-  -f default_workflow_permissions=read -F can_approve_pull_request_reviews=false --silent
+if is_set "$R/actions/permissions/workflow" '.default_workflow_permissions == "read" and .can_approve_pull_request_reviews == false'; then
+  skip
+else
+  gh api -X PUT "$R/actions/permissions/workflow" \
+    -f default_workflow_permissions=read -F can_approve_pull_request_reviews=false --silent
+fi
 
 step "Actions: SHA-pinned only; GitHub-owned plus an explicit list (order matters)"
-printf '%s' '{"enabled": true, "allowed_actions": "selected", "sha_pinning_required": true}' |
-  gh api -X PUT "$R/actions/permissions" --input - --silent
-printf '%s' '{"github_owned_allowed": true, "verified_allowed": false, "patterns_allowed": ["step-security/harden-runner@*", "zizmorcore/zizmor-action@*"]}' |
-  gh api -X PUT "$R/actions/permissions/selected-actions" --input - --silent
+if is_set "$R/actions/permissions" '.enabled == true and .allowed_actions == "selected" and .sha_pinning_required == true'; then
+  skip
+else
+  printf '%s' '{"enabled": true, "allowed_actions": "selected", "sha_pinning_required": true}' |
+    gh api -X PUT "$R/actions/permissions" --input - --silent
+fi
+if is_set "$R/actions/permissions/selected-actions" '.github_owned_allowed == true and .verified_allowed == false and (.patterns_allowed | sort) == ["step-security/harden-runner@*", "zizmorcore/zizmor-action@*"]'; then
+  skip
+else
+  printf '%s' '{"github_owned_allowed": true, "verified_allowed": false, "patterns_allowed": ["step-security/harden-runner@*", "zizmorcore/zizmor-action@*"]}' |
+    gh api -X PUT "$R/actions/permissions/selected-actions" --input - --silent
+fi
 
 step "Merges: squash only, commit title = PR title, delete branch on merge, no auto-merge"
-gh api -X PATCH "$R" -F allow_squash_merge=true -F allow_merge_commit=false -F allow_rebase_merge=false \
-  -f squash_merge_commit_title=PR_TITLE -f squash_merge_commit_message=PR_BODY \
-  -F delete_branch_on_merge=true -F allow_auto_merge=false --silent
+if is_set "$R" '.allow_squash_merge == true and .allow_merge_commit == false and .allow_rebase_merge == false and .squash_merge_commit_title == "PR_TITLE" and .delete_branch_on_merge == true and .allow_auto_merge == false'; then
+  skip
+else
+  gh api -X PATCH "$R" -F allow_squash_merge=true -F allow_merge_commit=false -F allow_rebase_merge=false \
+    -f squash_merge_commit_title=PR_TITLE -f squash_merge_commit_message=PR_BODY \
+    -F delete_branch_on_merge=true -F allow_auto_merge=false --silent
+fi
 
 step "Dependabot alerts, then security updates"
-gh api -X PUT "$R/vulnerability-alerts" --silent
-gh api -X PUT "$R/automated-security-fixes" --silent
+if gh api "$R/vulnerability-alerts" --silent 2>/dev/null; then
+  skip
+else
+  gh api -X PUT "$R/vulnerability-alerts" --silent
+fi
+if is_set "$R/automated-security-fixes" '.enabled == true'; then
+  skip
+else
+  gh api -X PUT "$R/automated-security-fixes" --silent
+fi
 
 step "Immutable releases"
-gh api -X PUT "$R/immutable-releases" --silent
+if is_set "$R/immutable-releases" '.enabled == true'; then
+  skip
+else
+  gh api -X PUT "$R/immutable-releases" --silent
+fi
 
 step "Labels"
 gh label create build-tracker --repo "$REPO" --force --color D93F0B \
@@ -71,15 +108,27 @@ fi
 # --- 3. Public-only settings ------------------------------------------------
 
 step "Secret scanning and push protection"
-gh api -X PATCH "$R" -f 'security_and_analysis[secret_scanning][status]=enabled' \
-  -f 'security_and_analysis[secret_scanning_push_protection][status]=enabled' --silent
+if is_set "$R" '.security_and_analysis.secret_scanning.status == "enabled" and .security_and_analysis.secret_scanning_push_protection.status == "enabled"'; then
+  skip
+else
+  gh api -X PATCH "$R" -f 'security_and_analysis[secret_scanning][status]=enabled' \
+    -f 'security_and_analysis[secret_scanning_push_protection][status]=enabled' --silent
+fi
 
 step "Private vulnerability reporting (SECURITY.md points to it)"
-gh api -X PUT "$R/private-vulnerability-reporting" --silent
+if is_set "$R/private-vulnerability-reporting" '.enabled == true'; then
+  skip
+else
+  gh api -X PUT "$R/private-vulnerability-reporting" --silent
+fi
 
 step "Fork PRs: approval required for all external contributors"
-gh api -X PUT "$R/actions/permissions/fork-pr-contributor-approval" \
-  -f approval_policy=all_external_contributors --silent
+if is_set "$R/actions/permissions/fork-pr-contributor-approval" '.approval_policy == "all_external_contributors"'; then
+  skip
+else
+  gh api -X PUT "$R/actions/permissions/fork-pr-contributor-approval" \
+    -f approval_policy=all_external_contributors --silent
+fi
 
 step "Workflow execution protection: only push and pull_request may start a workflow"
 # No `|| true` here: if the GET fails, stop rather than assume the policy exists.
@@ -94,7 +143,11 @@ fi
 
 # --- 4. Rulesets (after going public) ---------------------------------------
 
-step "Ruleset main: PR required, all-green required, branch up to date, signed commits, no bypass"
+step "Ruleset main: PR required, all-green required, branch up to date, no bypass"
+# No required_signatures: GitHub checks it against the PR's own commits too,
+# which an agent without the owner's signing key can't sign. Every commit on
+# main is a squash merge, which GitHub signs, because nothing else can land
+# there (PR required, no bypass actors). Decided with the owner at M1.
 # require_extra_approval_for_unattributed_changes is stated as false: GitHub
 # turns it on when a ruleset omits it, and its extra approval must come from
 # someone other than the PR author, which a sole owner can never give
@@ -111,7 +164,6 @@ ruleset main "$(cat <<EOF
  "rules": [
   {"type": "deletion"},
   {"type": "non_fast_forward"},
-  {"type": "required_signatures"},
   {"type": "pull_request", "parameters": {
     "required_approving_review_count": 0, "require_code_owner_review": false,
     "dismiss_stale_reviews_on_push": false, "require_last_push_approval": false,
@@ -133,17 +185,26 @@ ruleset tags-v '{"name": "tags-v", "target": "tag", "enforcement": "active", "by
 
 step "GitHub Pages: deployed by CI's pages job, at $DOMAIN"
 # The DNS record comes first: CNAME firelight.oss.life.li → prosperity-solutions.github.io.
-if gh api "$R/pages" --silent 2>/dev/null; then
-  gh api -X PUT "$R/pages" -f build_type=workflow --silent
-  echo "Pages already on"
-else
+if ! gh api "$R/pages" --silent 2>/dev/null; then
   gh api -X POST "$R/pages" -f build_type=workflow --silent
   echo "Pages turned on"
+elif is_set "$R/pages" '.build_type == "workflow"'; then
+  echo "Pages already on, deployed by workflow"
+else
+  gh api -X PUT "$R/pages" -f build_type=workflow --silent
 fi
-gh api -X PUT "$R/pages" -f cname="$DOMAIN" --silent
+if is_set "$R/pages" ".cname == \"$DOMAIN\""; then
+  echo "custom domain already $DOMAIN"
+else
+  gh api -X PUT "$R/pages" -f cname="$DOMAIN" --silent
+fi
 # Only main may deploy the site.
-printf '%s' '{"deployment_branch_policy": {"protected_branches": false, "custom_branch_policies": true}}' |
-  gh api -X PUT "$R/environments/github-pages" --input - --silent
+if is_set "$R/environments/github-pages" '.deployment_branch_policy.custom_branch_policies == true and .deployment_branch_policy.protected_branches == false'; then
+  echo "github-pages already uses a custom branch policy"
+else
+  printf '%s' '{"deployment_branch_policy": {"protected_branches": false, "custom_branch_policies": true}}' |
+    gh api -X PUT "$R/environments/github-pages" --input - --silent
+fi
 if gh api "$R/environments/github-pages/deployment-branch-policies" --jq '.branch_policies[].name' | grep -qx main; then
   echo "github-pages already deploys from main only"
 else
@@ -151,7 +212,9 @@ else
   echo "github-pages now deploys from main only"
 fi
 # GitHub issues the certificate a few minutes after the domain is set.
-if err=$(gh api -X PUT "$R/pages" -F https_enforced=true --silent 2>&1); then
+if is_set "$R/pages" '.https_enforced == true'; then
+  echo "HTTPS already enforced"
+elif err=$(gh api -X PUT "$R/pages" -F https_enforced=true --silent 2>&1); then
   echo "HTTPS enforced"
 else
   printf 'HTTPS not enforced yet (%s). Usually the certificate is still being issued: re-run this script in 15 minutes.\n' "$err" >&2

@@ -1,0 +1,12 @@
+{
+  "expect": "block",
+  "reason": "Only the owner runs it",
+  "bootstrap_done": true,
+  "branch": "ci/x",
+  "payload": {
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "echo scripts/dev/harden-public-repo.sh | xargs bash"
+    }
+  }
+}

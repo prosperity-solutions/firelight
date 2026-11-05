@@ -1,0 +1,11 @@
+{
+  "expect": "allow",
+  "bootstrap_done": true,
+  "branch": "ci/x",
+  "payload": {
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "git commit -q -m \"fix(scripts): harden-public-repo.sh states the setting off\""
+    }
+  }
+}

@@ -40,7 +40,7 @@ installs with auth `none`.
 | # | threat | wall |
 |---|---|---|
 | W1 | A hostile fork PR | Workflows from outside contributors need approval; forks get a read-only token; **the repo has no secrets** |
-| W2 | Red or unreviewed code reaching `main` | The `main` ruleset has **no bypass actors**: a PR, a green `all-green` check, an up-to-date branch and signed commits are required. `all-green` fails on drafts on purpose, because GitHub counts a skipped required check as passing |
+| W2 | Red or unreviewed code reaching `main` | The `main` ruleset has **no bypass actors**: a PR, a green `all-green` check and an up-to-date branch are required, and every commit on `main` is a squash merge that GitHub signs. `all-green` fails on drafts on purpose, because GitHub counts a skipped required check as passing |
 | W3 | Agent or token compromise | **Downgraded to seatbelts** in this project: the agent uses the owner's normal login, so the protections are the deny rules, the fail-closed guard hook and the auto-mode classifier. The no-bypass ruleset still makes merging red code require a visible, audited ruleset edit first |
 | W4 | Forged releases | Verify with `--signer-workflow …/ci.yml --source-ref refs/heads/main --deny-self-hosted-runners`. A run from any other branch can't produce an attestation that passes. Releases are immutable |
 | W5 | Moved or compromised actions | Every action is pinned by commit SHA (a repo setting enforces it); only GitHub-owned actions plus `step-security/harden-runner` and `zizmorcore/zizmor-action` may run |
