@@ -126,4 +126,23 @@ grep -q "REQUIRE_ATTESTATION" "$work/out" || { cat "$work/out"; fail "attestatio
 [ ! -e "$work/bin7/firelight" ] || fail "attestation refusal left a binary"
 pass "required attestation without gh refused"
 
+# 7. A gh whose active account works but another stored account doesn't:
+# the attestation still runs (a fake gh that records the call).
+mkdir -p "$work/fakegh"
+cat > "$work/fakegh/gh" <<'GH'
+#!/bin/sh
+case "$*" in
+  "auth status --active") exit 0 ;;
+  "auth status") exit 1 ;;
+  attestation\ verify*) echo verified >> "$GH_CALLS"; exit 0 ;;
+esac
+exit 1
+GH
+chmod +x "$work/fakegh/gh"
+if ! env -u GH_TOKEN -u GITHUB_TOKEN GH_CALLS="$work/gh-calls" PATH="$work/fakegh:$PATH" \
+  FIRELIGHT_INSTALL_REQUIRE_ATTESTATION=1 FIRELIGHT_INSTALL_BASE_URL="$base" FIRELIGHT_INSTALL_DIR="$work/bin8" HOME="$work" \
+  sh "$work/install.sh" > "$work/out" 2>&1; then cat "$work/out"; fail "a working active gh account wasn't used"; fi
+grep -q verified "$work/gh-calls" || fail "the attestation check didn't run"
+pass "gh with one broken stored account still verifies"
+
 echo "installer: all cases pass"

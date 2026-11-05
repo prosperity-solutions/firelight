@@ -28,7 +28,7 @@ repo=$GITHUB_REPOSITORY
 {
   printf '\n## Install\n\n```sh\n'
   printf 'docker pull ghcr.io/%s@%s\n' "$repo" "$IMAGE_DIGEST"
-  printf 'helm install firelight oci://ghcr.io/%s/charts/firelight --version %s --set publicUrl=https://firelight.acme.example\n```\n\n' "${repo%%/*}" "$VERSION"
+  printf 'helm install firelight oci://ghcr.io/%s/charts/firelight --version %s --set publicUrl=https://firelight.acme.example --set config.auth.ui=none --set config.auth.mcp=none\n```\n\nAuth none suits a cluster behind a VPN or an auth proxy; docs/self-hosting.md shows logins and tokens.\n\n' "${repo%%/*}" "$VERSION"
   printf '## Verify\n\n```sh\n'
   printf 'gh attestation verify firelight-%s-linux-amd64.tar.gz \\\n' "$tag"
   printf '  --repo %s --signer-workflow %s/.github/workflows/ci.yml \\\n' "$repo" "$repo"

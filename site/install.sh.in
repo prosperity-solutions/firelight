@@ -106,7 +106,13 @@ fi
 say "checksum ok ($expected)"
 
 attested=0
-if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+# `gh auth status` fails when any stored account is broken; --active (gh
+# 2.40+) asks only about the account in use.
+gh_ready() {
+  command -v gh >/dev/null 2>&1 || return 1
+  gh auth status --active >/dev/null 2>&1 || gh auth status >/dev/null 2>&1
+}
+if gh_ready; then
   if gh attestation verify "$tmp/$archive" --repo "$REPO" \
     --signer-workflow "$REPO/.github/workflows/ci.yml" \
     --source-ref refs/heads/main --deny-self-hosted-runners >/dev/null; then
