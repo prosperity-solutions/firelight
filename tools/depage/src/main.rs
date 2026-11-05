@@ -160,16 +160,9 @@ fn run(args: &[String]) -> Result<Report, String> {
     }
 
     // Test-only npm packages.
-    let npm = |s: Option<String>| -> Result<BTreeSet<(String, String)>, String> {
-        match s {
-            None => Ok(BTreeSet::new()),
-            Some(s) if serde_json::from_str::<serde_json::Value>(&s).is_err() => {
-                Err(format!("{NPM_LOCK} is not valid JSON"))
-            }
-            Some(s) => Ok(npm_packages(&s)),
-        }
-    };
+    let npm = |s: Option<String>| s.map_or(Ok(BTreeSet::new()), |s| npm_packages(&s));
     let head_npm = npm(read_head(NPM_LOCK)?)?;
+    // A base without a usable lockfile only means every package counts as new.
     let base_npm = npm(read_base(NPM_LOCK)?).unwrap_or_default();
     for (name, version) in head_npm.difference(&base_npm) {
         items.push(Item::Npm {
@@ -469,14 +462,19 @@ impl Fetcher {
 pub const NPM_LOCK: &str = "tests/browser/package-lock.json";
 
 /// (name, version) of every package in an npm lockfile (v2/v3).
-pub fn npm_packages(lock: &str) -> BTreeSet<(String, String)> {
-    let Ok(v) = serde_json::from_str::<serde_json::Value>(lock) else {
-        return BTreeSet::new();
+/// `(name, version)` of every package in an npm lockfile (v2 or v3). Anything
+/// else is an error, so new packages can never pass unchecked.
+pub fn npm_packages(lock: &str) -> Result<BTreeSet<(String, String)>, String> {
+    let v: serde_json::Value =
+        serde_json::from_str(lock).map_err(|e| format!("{NPM_LOCK} is not valid JSON: {e}"))?;
+    if v["lockfileVersion"].as_u64().is_none_or(|n| n < 2) {
+        return Err(format!("{NPM_LOCK} needs lockfileVersion 2 or 3"));
+    }
+    let Some(pkgs) = v["packages"].as_object() else {
+        return Err(format!("{NPM_LOCK} has no \"packages\" object"));
     };
-    v["packages"]
-        .as_object()
-        .into_iter()
-        .flatten()
+    Ok(pkgs
+        .iter()
         .filter_map(|(path, p)| {
             let name = path
                 .rsplit("node_modules/")
@@ -484,7 +482,7 @@ pub fn npm_packages(lock: &str) -> BTreeSet<(String, String)> {
                 .filter(|n| !n.is_empty() && path.contains("node_modules/"))?;
             Some((name.to_string(), p["version"].as_str()?.to_string()))
         })
-        .collect()
+        .collect())
 }
 
 /// The sparse index path of a crate name.
@@ -770,7 +768,15 @@ source = "git+https://example.com/x"
     #[test]
     fn npm() {
         let lock = r#"{"lockfileVersion":3,"packages":{"":{"name":"x"},"node_modules/@playwright/test":{"version":"1.64.1"},"node_modules/a/node_modules/b":{"version":"2.0.0"}}}"#;
-        let p = npm_packages(lock);
+        let p = npm_packages(lock).unwrap_or_else(|e| panic!("{e}"));
+        for bad in [
+            "not json",
+            "{}",
+            r#"{"lockfileVersion":1,"dependencies":{}}"#,
+            r#"{"lockfileVersion":3}"#,
+        ] {
+            assert!(npm_packages(bad).is_err(), "{bad}");
+        }
         assert!(p.contains(&("@playwright/test".to_string(), "1.64.1".to_string())));
         assert!(p.contains(&("b".to_string(), "2.0.0".to_string())));
         assert_eq!(p.len(), 2);

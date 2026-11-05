@@ -316,7 +316,7 @@ pub fn island_html(
 ) -> String {
     let mut h = H::new();
     let r = i.r.to_string();
-    let id = format!("island-{r}");
+    let id = format!("island:{r}");
     match &i.kind {
         PlacedKind::Cards { cards } => {
             let extra = if i.unsorted { " unsorted" } else { "" };
@@ -806,14 +806,14 @@ pub fn search_json(content: &dyn Content, space: &str, q: &str) -> serde_json::V
 /// The ⓘ overlay and the other dialogs (§18.5).
 fn dialogs(ui: &Ui, cat: &Catalog, _content: &dyn Content) -> String {
     let mut h = H::new();
-    h.raw("<dialog id=\"palette\" class=\"palette\" aria-label=\"Search\">\n<form method=\"dialog\"><input type=\"search\" placeholder=\"Search or ask…\" aria-label=\"Search\" autocomplete=\"off\"></form>\n<ul class=\"results\" role=\"listbox\"></ul>\n<p class=\"palette-empty\" hidden>Nothing found.</p>\n</dialog>\n");
+    h.raw("<dialog id=\"Palette\" class=\"palette\" aria-label=\"Search\">\n<form method=\"dialog\"><input type=\"search\" placeholder=\"Search or ask…\" aria-label=\"Search\" autocomplete=\"off\"></form>\n<ul class=\"results\" role=\"listbox\" aria-label=\"Results\"></ul>\n<p class=\"palette-empty\" hidden>Nothing found.</p>\n</dialog>\n");
     let mcp_url = format!("{}/mcp", ui.public_url.trim_end_matches('/'));
     let header = if ui.mcp_token {
         " --header \"Authorization: Bearer <your token>\""
     } else {
         ""
     };
-    h.raw("<dialog id=\"info\" class=\"info\" aria-label=\"About this Firelight\">\n<nav class=\"tabs\" role=\"tablist\">\n<button role=\"tab\" aria-selected=\"true\" data-tab=\"mcp\">Connect MCP</button>\n<button role=\"tab\" aria-selected=\"false\" data-tab=\"repo\">Add a repo</button>\n<button role=\"tab\" aria-selected=\"false\" data-tab=\"status\">Status</button>\n</nav>\n");
+    h.raw("<dialog id=\"Info\" class=\"info\" aria-label=\"About this Firelight\">\n<nav class=\"tabs\" role=\"tablist\">\n<button role=\"tab\" aria-selected=\"true\" data-tab=\"mcp\">Connect MCP</button>\n<button role=\"tab\" aria-selected=\"false\" data-tab=\"repo\">Add a repo</button>\n<button role=\"tab\" aria-selected=\"false\" data-tab=\"status\">Status</button>\n</nav>\n");
     if cat.space(SPACE_FIRELIGHT).is_some() {
         h.raw("<p class=\"docs-link\"><a href=\"/s/firelight\">Firelight docs</a>: how to write <code>.firelight/</code>, connect agents and run Firelight.</p>\n");
     }
@@ -849,7 +849,7 @@ fn dialogs(ui: &Ui, cat: &Catalog, _content: &dyn Content) -> String {
         visible_spaces(cat).len()
     ));
     h.raw("</section>\n<form method=\"dialog\"><button>Close</button></form>\n</dialog>\n");
-    h.raw("<dialog id=\"hidden-dialog\" aria-label=\"Hidden items\">\n<h2>Hidden</h2><ul class=\"hidden-list\"></ul>\n<p><button type=\"button\" data-action=\"reset-hidden\">Show everything again</button></p>\n<form method=\"dialog\"><button>Close</button></form>\n</dialog>\n");
+    h.raw("<dialog id=\"Hidden\" aria-label=\"Hidden items\">\n<h2>Hidden</h2><ul class=\"hidden-list\"></ul>\n<p><button type=\"button\" data-action=\"reset-hidden\">Show everything again</button></p>\n<form method=\"dialog\"><button>Close</button></form>\n</dialog>\n");
     h.finish()
 }
 

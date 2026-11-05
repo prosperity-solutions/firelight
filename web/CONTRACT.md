@@ -105,7 +105,7 @@ space are grouped:
 ### Cards
 
 ```html
-<section class="island cards" data-ref="acme-infra/environments" id="island-acme-infra/environments">
+<section class="island cards" data-ref="acme-infra/environments" id="island:acme-infra/environments">
   <h2>Environments</h2>
   <button type="button" class="eye" data-hide="acme-infra/environments" aria-pressed="false" title="Hide">👁</button>
   <div class="card-grid">
@@ -127,7 +127,7 @@ The Unsorted island has the extra class `unsorted`.
 ### Links island
 
 ```html
-<section class="island links-island" data-ref="acme-infra/consoles" id="island-acme-infra/consoles">
+<section class="island links-island" data-ref="acme-infra/consoles" id="island:acme-infra/consoles">
   <h2>Consoles</h2><button class="eye" …>
   <ul class="row"><li>LINK</li> …</ul>
 </section>
@@ -136,12 +136,13 @@ The Unsorted island has the extra class `unsorted`.
 ### Template island
 
 ```html
-<section class="island template" data-ref="acme-app/previews" id="island-acme-app/previews">
+<section class="island template" data-ref="acme-app/previews" id="island:acme-app/previews">
   <h2>PR previews</h2><button class="eye" …>
   <form class="template-form" method="get" action="/i/acme-app/previews">
-    <label>PR # <input name="pr" pattern="^[0-9]{1,6}$" placeholder="1234" required autocomplete="off"></label>
+    <label>PR # <input name="pr" placeholder="1234" required autocomplete="off"></label>
+    <input type="hidden" name="s" value="platform">   <!-- the space the island is shown in -->
     <button type="submit">Open</button>
-  </form>
+  </form>   <!-- no `pattern` attribute: the server checks the value, so the message is the same with and without JS -->
   <p class="help">Only services the PR deployed exist.</p>
   <ul class="links template-links" data-filled="false">   <!-- server-rendered when filled (on /i/…); empty otherwise -->
     <li>LINK</li> …
@@ -173,28 +174,40 @@ never `innerHTML` with server strings) or show the error. Debounce 200 ms.
   an Unhide button each, and Reset.
 - Hiding is per space; `/s/all` has its own list.
 
+## Element ids
+
+Three namespaces that can't meet: heading slugs are lowercase and never contain
+`/` or `:`; links are `<repo>/<id>`; islands are `island:<repo>/<id>`.
+Firelight's own dialogs start with a capital letter (`Palette`, `Info`, `Hidden`).
+
 ## Dialogs (at the end of `<body>`)
 
 ```html
-<dialog id="palette" class="palette" aria-label="Search">
+<dialog id="Palette" class="palette" aria-label="Search">
   <form method="dialog"><input type="search" placeholder="Search or ask…" aria-label="Search" autocomplete="off"></form>
-  <ul class="results" role="listbox"></ul>
+  <ul class="results" role="listbox" aria-label="Results">
+    <!-- per hit, built by palette.js; an option holds no control:
+    <li id="palette-hit-0" role="option" aria-selected="true" aria-keyshortcuts="Shift+Enter">
+      <span class="kind">link</span><span class="title">Argo CD</span><span class="repo">acme-infra</span>
+      <span class="summary">…</span><span class="show-me" aria-hidden="true">Show me ✨</span></li> -->
+  </ul>
   <p class="palette-empty" hidden>Nothing found.</p>
 </dialog>
 
-<dialog id="info" class="info" aria-label="About this Firelight">
+<dialog id="Info" class="info" aria-label="About this Firelight">
   <nav class="tabs" role="tablist">
     <button role="tab" aria-selected="true" data-tab="mcp">Connect MCP</button>
     <button role="tab" aria-selected="false" data-tab="repo">Add a repo</button>
     <button role="tab" aria-selected="false" data-tab="status">Status</button>
   </nav>
+  <p class="docs-link"><a href="/s/firelight">Firelight docs</a>: …</p>   <!-- only when the firelight space exists -->
   <section data-panel="mcp"> … <pre class="copy"><code>claude mcp add …</code></pre> … </section>
   <section data-panel="repo" hidden> … <pre class="copy"><code>…prompt…</code></pre> </section>
   <section data-panel="status" hidden> … server-rendered tables … </section>
   <form method="dialog"><button>Close</button></form>
 </dialog>
 
-<dialog id="hidden-dialog" aria-label="Hidden items">
+<dialog id="Hidden" aria-label="Hidden items">
   <h2>Hidden</h2><ul class="hidden-list"></ul>
   <p><button type="button" data-action="reset-hidden">Show everything again</button></p>
   <form method="dialog"><button>Close</button></form>
@@ -223,7 +236,8 @@ never `innerHTML` with server strings) or show the error. Debounce 200 ms.
 ```
 
 - Each result row: kind label (GUIDE / CONCEPT / LINK / REPO), title, repo,
-  summary (one line, ellipsis). Links also get a "Show me ✨" button.
+  summary (one line, ellipsis). Links also get a "Show me ✨" chip (a click
+  target for the mouse, not a control); Shift+Enter does the same from the keyboard.
   Arrow keys move the selection (`aria-selected`), Enter opens `url`, Esc closes.
 - Hidden refs of the current space sort to the bottom of the results.
 

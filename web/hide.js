@@ -102,7 +102,7 @@ function renderList(list) {
 
 export function initHide() {
   hidden = read();
-  const dialog = document.getElementById("hidden-dialog");
+  const dialog = document.getElementById("Hidden");
   const list = dialog && dialog.querySelector(".hidden-list");
   if (list) listeners.push(() => dialog.open && renderList(list));
 

@@ -23,10 +23,10 @@ test.describe("without JavaScript", () => {
 test("⌘K finds a guide and opens it at its section", async ({ page }) => {
   await page.goto("/s/platform");
   await page.keyboard.press(process.platform === "darwin" ? "Meta+k" : "Control+k");
-  const input = page.locator("#palette input");
+  const input = page.locator("#Palette input");
   await expect(input).toBeFocused();
   await input.fill("admin rights");
-  const first = page.locator("#palette .results [role=option], #palette .results li").first();
+  const first = page.locator("#Palette .results [role=option], #Palette .results li").first();
   await expect(first).toContainText("Request access rights");
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/e\/acme-infra\/request-access/);
@@ -40,6 +40,22 @@ test("Show me scrolls to the link and makes it glow", async ({ page }) => {
   await expect(link).toBeInViewport();
 });
 
+test("Shift+Enter on a link result shows where it is", async ({ page }) => {
+  await page.goto("/s/platform");
+  await page.keyboard.press(process.platform === "darwin" ? "Meta+k" : "Control+k");
+  await page.locator("#Palette input").fill("argo");
+  const options = page.locator("#Palette .results [role=option]");
+  await expect(options.first()).toBeVisible();
+  // Arrow down to the first link result.
+  const kinds = await options.evaluateAll((els) => els.map((e) => e.getAttribute("aria-keyshortcuts")));
+  const n = kinds.indexOf("Shift+Enter");
+  expect(n).toBeGreaterThanOrEqual(0);
+  for (let i = 0; i < n; i++) await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Shift+Enter");
+  await expect(page).toHaveURL(/\/s\/platform#acme-infra\/argo-/);
+  await expect(page.locator("a.link.glow").first()).toBeInViewport();
+});
+
 test("hide a card, reload, still hidden, unhide from the dialog", async ({ page }) => {
   await page.goto("/s/platform");
   await page.click('button[data-action="edit"]');
@@ -51,7 +67,7 @@ test("hide a card, reload, still hidden, unhide from the dialog", async ({ page 
   await expect(card).toBeHidden();
   await expect(page.locator("button.hidden-count")).toBeVisible();
   await page.click("button.hidden-count");
-  const dialog = page.locator("#hidden-dialog");
+  const dialog = page.locator("#Hidden");
   await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: /unhide|show/i }).first().click();
   await page.keyboard.press("Escape");
@@ -86,6 +102,14 @@ for (const scheme of ["light", "dark"]) {
       const serious = result.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
       expect(serious.map((v) => `${url}: ${v.id} ${v.help} (${v.nodes.length})`)).toEqual([]);
     }
+    // And with the search open, showing a guide and a link.
+    await page.goto("/s/platform");
+    await page.keyboard.press(process.platform === "darwin" ? "Meta+k" : "Control+k");
+    await page.locator("#Palette input").fill("access");
+    await expect(page.locator("#Palette .show-me").first()).toBeVisible();
+    const open = await new AxeBuilder({ page }).include("#Palette").analyze();
+    const bad = open.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
+    expect(bad.map((v) => `palette: ${v.id} ${v.help} (${v.nodes.length})`)).toEqual([]);
   });
 }
 

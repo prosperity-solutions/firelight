@@ -91,7 +91,7 @@ impl State<'_> {
             Event::Start(Tag::Image { .. }) => self.in_image += 1,
             Event::End(TagEnd::Image) => self.in_image = self.in_image.saturating_sub(1),
             // Inside an image only its alt text survives, as text: no links either.
-            Event::Text(t) if self.in_image > 0 => out.push(Event::Text(t)),
+            Event::Text(t) | Event::Code(t) if self.in_image > 0 => out.push(Event::Text(t)),
             _ if self.in_image > 0 => {}
             Event::Start(Tag::Link {
                 link_type,
@@ -240,6 +240,16 @@ mod tests {
         let out = r("![chart <b>](https://img.acme.example/x.png)");
         assert!(!out.contains("<img"), "{out}");
         assert!(out.contains("chart"), "{out}");
+        let out = r("![a `b` c](https://img.acme.example/x.png)");
+        assert!(out.contains('b'), "code in alt text stays as text: {out}");
+        for md in [
+            "![[x](https://a.acme.example)](https://img.acme.example/y.png)",
+            "![[x](javascript:alert(1))](https://img.acme.example/y.png)",
+        ] {
+            let out = r(md);
+            assert!(!out.contains("<a"), "no link inside an image: {out}");
+            assert!(out.contains('x'), "{out}");
+        }
     }
 
     #[test]

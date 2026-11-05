@@ -2,7 +2,7 @@
 source: crates/firelight-server/tests/pages.rs
 expression: "pages::island_html(&c.0, &island, Some(\"platform\"), &mut Default::default(),\nSome(&good))"
 ---
-<section class="island template" data-ref="acme-app/previews" id="island-acme-app/previews">
+<section class="island template" data-ref="acme-app/previews" id="island:acme-app/previews">
 <h2>PR previews</h2><button type="button" class="eye" data-hide="acme-app/previews" aria-pressed="false" title="Hide">👁</button>
 <form class="template-form" method="get" action="/i/acme-app/previews">
 <input type="hidden" name="s" value="platform">

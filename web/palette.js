@@ -6,7 +6,7 @@ import { backdropClose, debounce, getJson, h, openDialog, safeHref, space } from
 const KINDS = { guide: "Guide", concept: "Concept", link: "Link", repo: "Repo" };
 
 export function initPalette() {
-  const dialog = document.getElementById("palette");
+  const dialog = document.getElementById("Palette");
   if (!dialog) return;
   const input = dialog.querySelector("input");
   const form = dialog.querySelector("form");
@@ -34,12 +34,10 @@ export function initPalette() {
     index = hits.length ? (i + hits.length) % hits.length : -1;
     [...results.children].forEach((li, n) => {
       const on = n === index;
-      const opt = li.firstElementChild;
-      opt.setAttribute("aria-selected", String(on));
-      li.classList.toggle("on", on);
+      li.setAttribute("aria-selected", String(on));
       if (on) {
         li.scrollIntoView({ block: "nearest" });
-        input.setAttribute("aria-activedescendant", opt.id);
+        input.setAttribute("aria-activedescendant", li.id);
       }
     });
   }
@@ -71,17 +69,18 @@ export function initPalette() {
   }
 
   function row(hit, n) {
-    // The option holds only text; the "Show me" button sits beside it, not inside.
-    const li = h("li", { role: "presentation" });
-    const opt = h("div", { id: "palette-hit-" + n, role: "option", className: "hit", "aria-selected": "false" });
-    li.append(opt);
-    opt.append(h("span", { className: "kind", textContent: KINDS[hit.kind] || String(hit.kind || "") }));
-    opt.append(h("span", { className: "title", textContent: String(hit.title ?? hit.ref ?? "") }));
-    if (hit.repo) opt.append(h("span", { className: "repo", textContent: String(hit.repo) }));
+    const li = h("li", { id: "palette-hit-" + n, role: "option", "aria-selected": "false" });
+    li.append(h("span", { className: "kind", textContent: KINDS[hit.kind] || String(hit.kind || "") }));
+    li.append(h("span", { className: "title", textContent: String(hit.title ?? hit.ref ?? "") }));
+    if (hit.repo) li.append(h("span", { className: "repo", textContent: String(hit.repo) }));
     const line = hit.summary;
-    if (line) opt.append(h("span", { className: "summary", textContent: String(line) }));
+    if (line) li.append(h("span", { className: "summary", textContent: String(line) }));
     if (hit.kind === "link" && hit.show) {
-      const btn = h("button", { type: "button", className: "show-me", tabIndex: -1, textContent: "Show me ✨" });
+      // Keyboard: Shift+Enter. The chip is a mouse shortcut for the same thing,
+      // not a control, so the option holds nothing interactive.
+      li.setAttribute("aria-keyshortcuts", "Shift+Enter");
+      li.setAttribute("aria-description", "Shift+Enter: show me where it is");
+      const btn = h("span", { className: "show-me", "aria-hidden": "true", textContent: "Show me ✨" });
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
         showMe(hit);
@@ -120,6 +119,7 @@ export function initPalette() {
   input.addEventListener("keydown", (e) => {
     if (e.key === "ArrowDown") select(index + 1);
     else if (e.key === "ArrowUp") select(index - 1);
+    else if (e.key === "Enter" && e.shiftKey && hits[index]?.kind === "link" && hits[index].show) showMe(hits[index]);
     else if (e.key === "Enter" && hits[index]) go(hits[index]);
     else return;
     e.preventDefault();

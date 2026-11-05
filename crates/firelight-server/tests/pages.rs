@@ -311,14 +311,31 @@ fn search_stays_in_its_space() {
             };
             for s in &spaces {
                 let hits = firelight_search::search(cat, s, &e.title, 100);
+                // The oracle is the catalog itself, not the helper search filters with.
+                let visible: Vec<&firelight_format::catalog::Space> = cat
+                    .spaces
+                    .iter()
+                    .filter(|x| {
+                        if *s == firelight_format::SPACE_ALL {
+                            x.id != firelight_format::SPACE_FIRELIGHT
+                        } else {
+                            x.id == *s
+                        }
+                    })
+                    .collect();
                 for h in &hits {
-                    if h.kind != firelight_search::Kind::Link {
-                        assert!(
-                            firelight_search::entry_in_space(cat, s, &h.r),
-                            "{} showed up in space {s}",
-                            h.r
-                        );
-                    }
+                    let ok = if h.kind == firelight_search::Kind::Link {
+                        let html = visible
+                            .iter()
+                            .filter_map(|x| {
+                                pages::space_page(&ui(), c.as_ref(), &x.id, &BTreeMap::new())
+                            })
+                            .collect::<String>();
+                        html.contains(&format!("data-ref=\"{}\"", h.r))
+                    } else {
+                        visible.iter().any(|x| x.entries.contains(&h.r))
+                    };
+                    assert!(ok, "{} showed up in space {s}", h.r);
                 }
                 let placed = cat
                     .spaces
@@ -337,4 +354,51 @@ fn search_stays_in_its_space() {
     let a = cat.space("platform").map(|s| s.entries.clone());
     let b = cat.space("support").map(|s| s.entries.clone());
     assert_ne!(a, b);
+}
+
+/// No page repeats an element id: headings, links, islands and dialogs live in
+/// separate namespaces, even when a heading is called "Info" or "Palette".
+#[test]
+fn ids_are_unique_on_every_page() {
+    let mut repos = vec![
+        repo_from("fixtures/acme-infra"),
+        repo_from("fixtures/acme-app"),
+    ];
+    let files = vec![
+        InputFile::regular("repo.yaml", b"format: 1\nid: clash\nname: Clash\nsummary: Ids.\n".to_vec()),
+        InputFile::regular(
+            "guides/g.md",
+            b"---\nformat: 1\ntitle: G\nsummary: S.\n---\n## Info\n\n## Palette\n\n## Hidden\n\n## Setup\n\n## Setup\n\n## Setup 2\n".to_vec(),
+        ),
+    ];
+    repos.push(
+        parse_repo(&files, None, &Limits::default())
+            .0
+            .unwrap_or_else(|| panic!("clash repo")),
+    );
+    let c = Fixed(Arc::new(catalog::build(repos, Strictness::Lenient)));
+    let ui = ui();
+    let cat = c.0.clone();
+    let mut pages_html: Vec<String> = cat
+        .spaces
+        .iter()
+        .filter_map(|s| pages::space_page(&ui, &c, &s.id, &BTreeMap::new()))
+        .collect();
+    for repo in &cat.repos {
+        for e in &repo.entries {
+            let r = Ref {
+                repo: repo.id.clone(),
+                id: e.id.clone(),
+            };
+            pages_html.extend(pages::entry_page(&ui, &c, &r, None));
+        }
+    }
+    assert!(pages_html.len() > 5);
+    for html in &pages_html {
+        let mut seen = std::collections::BTreeSet::new();
+        for part in html.split(" id=\"").skip(1) {
+            let id = part.split('"').next().unwrap_or("");
+            assert!(seen.insert(id.to_string()), "id {id:?} twice in:\n{html}");
+        }
+    }
 }

@@ -34,13 +34,7 @@ fn id_of(dir: &std::path::Path, limits: &Limits) -> String {
 }
 
 pub fn run(args: Args) -> anyhow::Result<()> {
-    // Auth is off in preview, so it never listens beyond this machine (§12.1).
-    if !args.listen.ip().is_loopback() {
-        anyhow::bail!(
-            "preview listens on loopback only (auth is off): use 127.0.0.1:<port> or [::1]:<port>, not {}",
-            args.listen
-        );
-    }
+    check_listen(args.listen)?;
     if let Some(e) = &args.embedder
         && e != "off"
     {
@@ -68,31 +62,27 @@ pub fn run(args: Args) -> anyhow::Result<()> {
         .build()?;
     rt.block_on(async move {
         let data = std::env::temp_dir().join(format!("firelight-preview-{}", std::process::id()));
-        let puller = Puller { git: Git::default(), data_dir: data, limits, clock: Arc::new(SystemClock) };
+        let puller = Puller {
+            git: Git::default(),
+            data_dir: data,
+            limits,
+            clock: Arc::new(SystemClock),
+        };
         let store = Store::memory().context("in-memory database")?;
         let hub = Hub::new(specs.clone(), puller, store, limits, true);
         hub.load_cache();
         for s in &specs {
             hub.pull(&s.id).await;
         }
-        // Report what doesn't pass at start; the watcher reports each change.
-        let report = |hub: &Hub| {
-            for st in hub.source_states() {
-                if let Some(d) = st.newest_diagnostics.filter(|d| d != "[]") {
-                    eprintln!("firelight preview: {} doesn't pass its checks, so the last good version shows: {d}", st.source_id);
-                }
-                if let Some(e) = st.last_pull_error {
-                    eprintln!("firelight preview: {}: {e}", st.source_id);
-                }
-            }
-        };
-        report(&hub);
+        // Report what doesn't pass at start, then every change (and recovery).
+        let mut last = problems(&hub);
+        report(&[], &last);
         // Live reload: re-read every folder each second.
         let watcher = hub.clone();
         let ids: Vec<String> = specs.iter().map(|s| s.id.clone()).collect();
-        let mut last: Vec<(String, Option<String>)> = Vec::new();
         tokio::spawn(async move {
             let mut t = tokio::time::interval(Duration::from_secs(1));
+            t.tick().await; // the first tick is immediate; the folders were just read
             loop {
                 t.tick().await;
                 let mut changed = false;
@@ -102,12 +92,10 @@ pub fn run(args: Args) -> anyhow::Result<()> {
                 if changed {
                     tracing::info!("reloaded");
                 }
-                if changed || watcher.source_states().iter().any(|s| s.newest_diagnostics.as_deref().is_some_and(|d| d != "[]")) {
-                    let now = watcher.source_states().iter().map(|s| (s.source_id.clone(), s.newest_diagnostics.clone())).collect::<Vec<_>>();
-                    if now != last {
-                        report_states(&now);
-                        last = now;
-                    }
+                let now = problems(&watcher);
+                if now != last {
+                    report(&last, &now);
+                    last = now;
                 }
             }
         });
@@ -132,14 +120,70 @@ pub fn run(args: Args) -> anyhow::Result<()> {
     })
 }
 
-/// Print which sources don't pass their checks, after a change.
-fn report_states(states: &[(String, Option<String>)]) {
-    for (id, d) in states {
-        match d.as_deref() {
-            Some(d) if d != "[]" => eprintln!(
+/// Per source: its failing checks and its last read error, if any.
+type Problems = Vec<(String, Option<String>, Option<String>)>;
+
+fn problems(hub: &Hub) -> Problems {
+    hub.source_states()
+        .into_iter()
+        .map(|s| {
+            (
+                s.source_id,
+                s.newest_diagnostics.filter(|d| d != "[]"),
+                s.last_pull_error,
+            )
+        })
+        .collect()
+}
+
+/// Print what is wrong now that wasn't before, and what passes again.
+fn report(before: &[(String, Option<String>, Option<String>)], now: &Problems) {
+    for (id, diags, err) in now {
+        let old = before.iter().find(|(i, ..)| i == id);
+        let (old_d, old_e) = old.map_or((None, None), |(_, d, e)| (d.as_ref(), e.as_ref()));
+        if let Some(d) = diags
+            && old_d != Some(d)
+        {
+            eprintln!(
                 "firelight preview: {id} doesn't pass its checks, so the last good version shows: {d}"
-            ),
-            _ => {}
+            );
+        }
+        if let Some(e) = err
+            && old_e != Some(e)
+        {
+            eprintln!("firelight preview: {id}: {e}");
+        }
+        if diags.is_none() && err.is_none() && (old_d.is_some() || old_e.is_some()) {
+            eprintln!("firelight preview: {id} passes again");
+        }
+    }
+}
+
+/// Auth is off in preview, so it never listens beyond this machine (§12.1).
+fn check_listen(listen: std::net::SocketAddr) -> anyhow::Result<()> {
+    if !listen.ip().is_loopback() {
+        anyhow::bail!(
+            "preview listens on loopback only (auth is off): use 127.0.0.1:<port> or [::1]:<port>, not {listen}"
+        );
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod listen_tests {
+    #[test]
+    fn loopback_only() {
+        for ok in ["127.0.0.1:8080", "[::1]:8080"] {
+            assert!(
+                super::check_listen(ok.parse().unwrap_or_else(|e| panic!("{e}"))).is_ok(),
+                "{ok}"
+            );
+        }
+        for bad in ["0.0.0.0:8080", "[::]:8080", "192.0.2.1:8080"] {
+            assert!(
+                super::check_listen(bad.parse().unwrap_or_else(|e| panic!("{e}"))).is_err(),
+                "{bad}"
+            );
         }
     }
 }

@@ -267,6 +267,7 @@ links:
   - { label: Docs, url: "https://docs-{pr}.preview.acme.example", icon: file }
 help: Only services the PR deployed exist.
 ```
+- Input names are `^[a-z][a-z0-9_]{0,31}$`; `s` and `format` are reserved (the `/i/` route reads them).
 - Values must match their anchored `pattern` before anything renders. A template URL may use a placeholder only in the host's first label, as one whole path segment, or as one query value; that's checked at validation, so a value can never change the scheme or the registered domain.
 - **Encoding per position:** in a host label the value must also match `^[a-z0-9-]{1,63}$` (whatever `pattern` says); in a path segment it is percent-encoded as one segment and `.`/`..` are rejected; in a query value it is percent-encoded as a query component. A test per position covers dot-segments, `/`, `%`, `@`, `#`, `?` and Unicode.
 - It works without JavaScript: the island is a `GET` form to `/i/<repo>/<id>`, which renders the links server-side. With JS it updates in place. `#<island-ref>:<name>=<value>` in the page URL pre-fills it.

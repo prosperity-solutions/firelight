@@ -64,12 +64,12 @@ function initTabs(dialog) {
 
 export function initInfo() {
   addCopyButtons();
-  const info = document.getElementById("info");
+  const info = document.getElementById("Info");
   if (info) {
     initTabs(info);
     backdropClose(info);
   }
-  const hiddenDialog = document.getElementById("hidden-dialog");
+  const hiddenDialog = document.getElementById("Hidden");
   if (hiddenDialog) backdropClose(hiddenDialog);
   document.addEventListener("click", (e) => {
     const b = e.target instanceof Element ? e.target.closest('[data-action="info"]') : null;

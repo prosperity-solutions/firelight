@@ -74,6 +74,11 @@ fn split_vars(s: &str, pos: Position, out: &mut Vec<Piece>) -> Result<(), String
             .find('}')
             .ok_or_else(|| format!("unclosed {{ in {s:?}"))?;
         let name = &after[..j];
+        if RESERVED_INPUTS.contains(&name) {
+            return Err(format!(
+                "{{{name}}} can't be a placeholder: `s` and `format` are reserved by the page"
+            ));
+        }
         if !valid_name(name) {
             return Err(format!(
                 "{{{name}}} is not a placeholder name: lowercase letters, digits and _"

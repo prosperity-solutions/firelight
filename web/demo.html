@@ -40,7 +40,7 @@
   </ul>
 </header>
 <main>
-  <section class="island cards" data-ref="acme-infra/environments" id="island-acme-infra/environments">
+  <section class="island cards" data-ref="acme-infra/environments" id="island:acme-infra/environments">
     <h2>Environments</h2>
     <button type="button" class="eye" data-hide="acme-infra/environments" aria-pressed="false" title="Hide">👁</button>
     <div class="card-grid">
@@ -72,7 +72,7 @@
     </div>
   </section>
 
-  <section class="island links-island" data-ref="acme-infra/consoles" id="island-acme-infra/consoles">
+  <section class="island links-island" data-ref="acme-infra/consoles" id="island:acme-infra/consoles">
     <h2>Consoles</h2>
     <button type="button" class="eye" data-hide="acme-infra/consoles" aria-pressed="false" title="Hide">👁</button>
     <ul class="row">
@@ -81,11 +81,11 @@
     </ul>
   </section>
 
-  <section class="island template" data-ref="acme-app/previews" id="island-acme-app/previews">
+  <section class="island template" data-ref="acme-app/previews" id="island:acme-app/previews">
     <h2>PR previews</h2>
     <button type="button" class="eye" data-hide="acme-app/previews" aria-pressed="false" title="Hide">👁</button>
     <form class="template-form" method="get" action="/i/acme-app/previews">
-      <label>PR # <input name="pr" pattern="^[0-9]{1,6}$" placeholder="1234" required autocomplete="off"></label>
+      <label>PR # <input name="pr" placeholder="1234" required autocomplete="off"></label>
       <button type="submit">Open</button>
     </form>
     <p class="help">Only services the PR deployed exist.</p>
@@ -100,13 +100,13 @@
   <p class="colophon">Firelight v0.3.0 · <a href="#">Format</a></p>
 </footer>
 
-<dialog id="palette" class="palette" aria-label="Search">
+<dialog id="Palette" class="palette" aria-label="Search">
   <form method="dialog"><input type="search" placeholder="Search or ask…" aria-label="Search" autocomplete="off"></form>
   <ul class="results" role="listbox"></ul>
   <p class="palette-empty" hidden>Nothing found.</p>
 </dialog>
 
-<dialog id="info" class="info" aria-label="About this Firelight">
+<dialog id="Info" class="info" aria-label="About this Firelight">
   <nav class="tabs" role="tablist">
     <button role="tab" aria-selected="true" data-tab="mcp">Connect MCP</button>
     <button role="tab" aria-selected="false" data-tab="repo">Add a repo</button>
@@ -118,7 +118,7 @@
   <form method="dialog"><button>Close</button></form>
 </dialog>
 
-<dialog id="hidden-dialog" aria-label="Hidden items">
+<dialog id="Hidden" aria-label="Hidden items">
   <h2>Hidden</h2><ul class="hidden-list"></ul>
   <p><button type="button" data-action="reset-hidden">Show everything again</button></p>
   <form method="dialog"><button>Close</button></form>

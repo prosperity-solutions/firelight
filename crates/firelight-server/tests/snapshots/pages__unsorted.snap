@@ -2,7 +2,7 @@
 source: crates/firelight-server/tests/pages.rs
 expression: "pages::island_html(&c.0, &unsorted, Some(\"platform\"), &mut Default::default(),\nNone)"
 ---
-<section class="island cards unsorted" data-ref="platform/-unsorted" id="island-platform/-unsorted">
+<section class="island cards unsorted" data-ref="platform/-unsorted" id="island:platform/-unsorted">
 <h2>Unsorted</h2><button type="button" class="eye" data-hide="platform/-unsorted" aria-pressed="false" title="Hide">👁</button>
 <div class="card-grid">
 <article class="card" data-ref="platform/-unsorted/acme-app">
