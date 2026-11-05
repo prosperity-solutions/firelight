@@ -17,8 +17,9 @@
 //! is checked against GitHub's release when `repo` is set. Index entries
 //! without `pubtime` predate the field (2025) and so are old enough.
 //!
-//! No dependencies: HTTP goes through `curl`, and the two TOML files are a
-//! strict flat subset parsed here. Tests point `DEPAGE_FETCH_DIR` at a folder
+//! Test-only npm packages (`tests/browser/package-lock.json`) follow the same
+//! rule, dated by the npm registry. HTTP goes through `curl`; the two TOML
+//! files are a strict flat subset parsed here; JSON uses serde_json. Tests point `DEPAGE_FETCH_DIR` at a folder
 //! that mirrors the URLs, so they never touch the network.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -158,6 +159,17 @@ fn run(args: &[String]) -> Result<Report, String> {
         }
     }
 
+    // Test-only npm packages.
+    let npm = |s: Option<String>| s.map(|s| npm_packages(&s)).unwrap_or_default();
+    let head_npm = npm(read_head(NPM_LOCK)?);
+    let base_npm = npm(read_base(NPM_LOCK)?);
+    for (name, version) in head_npm.difference(&base_npm) {
+        items.push(Item::Npm {
+            name: name.clone(),
+            version: version.clone(),
+        });
+    }
+
     let exceptions = parse_exceptions(&read_head(".github/fresh-deps.txt")?.unwrap_or_default())?;
     Ok(check(
         &items,
@@ -184,14 +196,19 @@ pub enum Item {
         repo: Option<String>,
         tag: Option<String>,
     },
+    /// A test-only npm package (tests/browser/package-lock.json).
+    Npm {
+        name: String,
+        version: String,
+    },
 }
 
 impl Item {
     fn key(&self) -> (String, String) {
         match self {
-            Item::Crate { name, version } | Item::Bin { name, version, .. } => {
-                (name.clone(), version.clone())
-            }
+            Item::Crate { name, version }
+            | Item::Bin { name, version, .. }
+            | Item::Npm { name, version } => (name.clone(), version.clone()),
             Item::Toolchain { version } => ("toolchain".into(), version.clone()),
         }
     }
@@ -200,6 +217,7 @@ impl Item {
             Item::Crate { name, version } => format!("crate {name} {version}"),
             Item::Toolchain { version } => format!("Rust toolchain {version}"),
             Item::Bin { name, version, .. } => format!("tool {name} {version}"),
+            Item::Npm { name, version } => format!("npm package {name} {version}"),
         }
     }
 }
@@ -337,6 +355,15 @@ pub fn check(
 /// The publish time of an item; `None` when the source predates recorded dates.
 fn published(item: &Item, f: &Fetcher) -> Result<Option<i64>, String> {
     match item {
+        Item::Npm { name, version } => {
+            let doc = f.get(&format!("https://registry.npmjs.org/{name}"))?;
+            let v: serde_json::Value =
+                serde_json::from_str(&doc).map_err(|e| format!("registry JSON: {e}"))?;
+            let t = v["time"][version.as_str()]
+                .as_str()
+                .ok_or_else(|| format!("{name} {version} is not in the npm registry"))?;
+            parse_time(t).map(Some)
+        }
         Item::Crate { name, version } => {
             let index = f.get(&format!("https://index.crates.io/{}", index_path(name)))?;
             for line in index.lines() {
@@ -429,6 +456,27 @@ impl Fetcher {
         }
         String::from_utf8(out.stdout).map_err(|e| format!("{url}: {e}"))
     }
+}
+
+pub const NPM_LOCK: &str = "tests/browser/package-lock.json";
+
+/// (name, version) of every package in an npm lockfile (v2/v3).
+pub fn npm_packages(lock: &str) -> BTreeSet<(String, String)> {
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(lock) else {
+        return BTreeSet::new();
+    };
+    v["packages"]
+        .as_object()
+        .into_iter()
+        .flatten()
+        .filter_map(|(path, p)| {
+            let name = path
+                .rsplit("node_modules/")
+                .next()
+                .filter(|n| !n.is_empty() && path.contains("node_modules/"))?;
+            Some((name.to_string(), p["version"].as_str()?.to_string()))
+        })
+        .collect()
 }
 
 /// The sparse index path of a crate name.
@@ -709,6 +757,27 @@ source = "git+https://example.com/x"
         };
         assert!(!check(std::slice::from_ref(&tc), &[], now, false, &f).failed);
         assert!(check(&[tc], &[], t("2026-10-20T00:00:00Z"), false, &f).failed);
+    }
+
+    #[test]
+    fn npm() {
+        let lock = r#"{"lockfileVersion":3,"packages":{"":{"name":"x"},"node_modules/@playwright/test":{"version":"1.64.1"},"node_modules/a/node_modules/b":{"version":"2.0.0"}}}"#;
+        let p = npm_packages(lock);
+        assert!(p.contains(&("@playwright/test".to_string(), "1.64.1".to_string())));
+        assert!(p.contains(&("b".to_string(), "2.0.0".to_string())));
+        assert_eq!(p.len(), 2);
+        let (d, f) = fixture();
+        d.write(
+            "registry.npmjs.org/@playwright/test",
+            r#"{"time":{"1.64.1":"2026-10-14T11:58:13.696Z","1.65.0":"2026-11-04T00:00:00.000Z"}}"#,
+        );
+        let now = t("2026-11-05T00:00:00Z");
+        let item = |v: &str| Item::Npm {
+            name: "@playwright/test".into(),
+            version: v.into(),
+        };
+        assert!(!check(&[item("1.64.1")], &[], now, false, &f).failed);
+        assert!(check(&[item("1.65.0")], &[], now, false, &f).failed);
     }
 
     #[test]

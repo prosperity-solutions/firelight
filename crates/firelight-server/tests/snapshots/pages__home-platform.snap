@@ -1,0 +1,174 @@
+---
+source: crates/firelight-server/tests/pages.rs
+expression: "pages::space_page(&ui, c.as_ref(), \"platform\",\n&BTreeMap::new()).unwrap_or_default()"
+---
+<!doctype html>
+<html lang="en" data-space="platform" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Platform · Firelight·acme</title>
+<link rel="stylesheet" href="/assets/app.css">
+<link rel="stylesheet" href="/assets/theme.css">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<script type="module" src="/assets/app.js"></script>
+</head>
+<body>
+<header class="bar">
+<div class="bar-top">
+<nav class="brand" aria-label="Spaces">
+<a class="title" href="/">Firelight·acme</a>
+<span class="sep">›</span>
+<details class="space-switch">
+<summary>Platform</summary>
+<ul class="space-list">
+<li><a href="/s/platform" aria-current="page">Platform<small>Environments, clusters, access, deploys.</small></a></li>
+<li><a href="/s/support">Support<small>What the support team needs every day.</small></a></li>
+<li class="all"><a href="/s/all">All<small>Everything on one page</small></a></li>
+</ul>
+</details>
+</nav>
+<form class="search" role="search" action="/s/platform/search" method="get">
+<input type="search" name="q" placeholder="Search or ask…" aria-label="Search" autocomplete="off">
+<kbd class="hint">⌘K</kbd>
+</form>
+<div class="tools">
+<button type="button" class="hidden-count" data-action="hidden" hidden>Hidden (<span>0</span>)</button>
+<button type="button" data-action="edit" aria-pressed="false" title="Hide things">✎</button>
+<button type="button" data-action="info" title="About this Firelight">ⓘ</button>
+<button type="button" data-action="theme" title="Light or dark">◐</button>
+</div>
+</div>
+<ul class="row top">
+<li><a class="link" href="https://access.acme.example" data-ref="acme-infra/access-portal" id="acme-infra/access-portal"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#key"></use></svg><span class="label">Access</span></a><a class="what" href="/e/acme-infra/access-model?s=platform" title="What is this?">?</a></li>
+<li><a class="link" href="https://errors.acme.example" data-ref="acme-app/errors" id="acme-app/errors"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#bug"></use></svg><span class="label">Errors</span></a></li>
+<li><a class="link" href="https://chat.acme.example" data-ref="acme-app/team-chat" id="acme-app/team-chat"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#message"></use></svg><span class="label">Team chat</span></a></li>
+</ul>
+</header>
+<main class="space">
+<section class="island cards" data-ref="acme-infra/environments" id="island-acme-infra/environments">
+<h2>Environments</h2><button type="button" class="eye" data-hide="acme-infra/environments" aria-pressed="false" title="Hide">👁</button>
+<div class="card-grid">
+<article class="card tone-danger" data-ref="acme-infra/environments/production">
+<h3>Production</h3><button type="button" class="eye" data-hide="acme-infra/environments/production" aria-pressed="false" title="Hide">👁</button>
+<h4>apps</h4><ul class="links">
+<li><a class="link" href="https://app.acme.example" data-ref="acme-app/app-production" id="acme-app/app-production"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#globe"></use></svg><span class="label">App</span><span class="note">app.acme.example</span></a></li>
+<li><a class="link" href="https://api.acme.example" data-ref="acme-app/api-production" id="acme-app/api-production"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#server"></use></svg><span class="label">API</span></a></li>
+</ul>
+<h4>tools</h4><ul class="links">
+<li><a class="link" href="https://argo.acme.example" data-ref="acme-infra/argo-production" id="acme-infra/argo-production"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#refresh"></use></svg><span class="label">Argo CD</span><span class="note">argo.acme.example</span></a><a class="what" href="/e/acme-infra/argocd?s=platform" title="What is this?">?</a></li>
+</ul>
+</article>
+<article class="card" data-ref="acme-infra/environments/staging">
+<h3>Staging</h3><button type="button" class="eye" data-hide="acme-infra/environments/staging" aria-pressed="false" title="Hide">👁</button>
+<h4>apps</h4><ul class="links">
+<li><a class="link" href="https://app.staging.acme.example" data-ref="acme-app/app-staging" id="acme-app/app-staging"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#globe"></use></svg><span class="label">App</span></a></li>
+</ul>
+<h4>tools</h4><ul class="links">
+<li><a class="link" href="https://argo.staging.acme.example" data-ref="acme-infra/argo-staging" id="acme-infra/argo-staging"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#refresh"></use></svg><span class="label">Argo CD</span><span class="note">argo.staging.acme.example</span></a><a class="what" href="/e/acme-infra/argocd?s=platform" title="What is this?">?</a></li>
+<li><a class="link" href="https://traces.staging.acme.example" data-ref="acme-infra/traces-staging" id="acme-infra/traces-staging"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#activity"></use></svg><span class="label">Traces</span></a></li>
+</ul>
+</article>
+<article class="card" data-ref="acme-infra/environments/demo">
+<h3>Demo</h3><button type="button" class="eye" data-hide="acme-infra/environments/demo" aria-pressed="false" title="Hide">👁</button>
+<h4>apps</h4><ul class="links">
+<li><a class="link" href="https://demo.acme.example" data-ref="acme-app/app-demo" id="acme-app/app-demo"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#globe"></use></svg><span class="label">App</span></a></li>
+</ul>
+</article>
+</div>
+</section>
+<section class="island links-island" data-ref="acme-infra/consoles" id="island-acme-infra/consoles">
+<h2>Consoles</h2><button type="button" class="eye" data-hide="acme-infra/consoles" aria-pressed="false" title="Hide">👁</button>
+<ul class="row">
+<li><a class="link" href="https://console.cloud.acme.example" data-ref="acme-infra/cloud-console" id="acme-infra/cloud-console"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#cloud"></use></svg><span class="label">Cloud console</span></a></li>
+</ul>
+</section>
+<section class="island template" data-ref="acme-app/previews" id="island-acme-app/previews">
+<h2>PR previews</h2><button type="button" class="eye" data-hide="acme-app/previews" aria-pressed="false" title="Hide">👁</button>
+<form class="template-form" method="get" action="/i/acme-app/previews">
+<input type="hidden" name="s" value="platform">
+<label>PR # <input name="pr" pattern="[0-9]{1,6}" placeholder="1234" required autocomplete="off"></label>
+<button type="submit">Open</button>
+</form>
+<p class="help">Only services the PR deployed exist.</p>
+<ul class="links template-links" data-filled="false"></ul>
+<p class="template-error" hidden></p>
+</section>
+<section class="island cards unsorted" data-ref="platform/unsorted" id="island-platform/unsorted">
+<h2>Unsorted</h2><button type="button" class="eye" data-hide="platform/unsorted" aria-pressed="false" title="Hide">👁</button>
+<div class="card-grid">
+<article class="card" data-ref="/unsorted/acme-app">
+<h3>App</h3><button type="button" class="eye" data-hide="/unsorted/acme-app" aria-pressed="false" title="Hide">👁</button>
+<ul class="links">
+<li><a class="link" href="https://dash.acme.example" data-ref="acme-app/old-dashboard" id="acme-app/old-dashboard"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#chart"></use></svg><span class="label">Old dashboard</span><span class="note">going away</span></a></li>
+</ul>
+</article>
+</div>
+</section>
+<section class="island entries"><h2>Concepts and guides</h2>
+<ul class="entry-list">
+<li><span class="kind">Guide</span> <a href="/e/acme-app/deploy-an-app?s=platform">Deploy the app</a> <span class="summary">From a merged pull request to the app running in staging and production.</span></li>
+<li><span class="kind">Guide</span> <a href="/e/acme-app/onboarding?s=platform">Onboarding</a> <span class="summary">Your first day on the app team: accounts, access, and your first deploy.</span></li>
+<li><span class="kind">Concept</span> <a href="/e/acme-app/release-train?s=platform">Release train</a> <span class="summary">The app ships to production every Tuesday and Thursday; anything merged before noon goes along.</span></li>
+<li><span class="kind">Concept</span> <a href="/e/acme-infra/access-model?s=platform">Access model</a> <span class="summary">Who may do what in Acme&#39;s cloud accounts, and how admin rights are granted for a limited time.</span></li>
+<li><span class="kind">Concept</span> <a href="/e/acme-infra/argocd?s=platform">Argo CD</a> <span class="summary">Rolls every Helm release in this repo out to its cluster, and shows what is deployed where.</span></li>
+<li><span class="kind">Guide</span> <a href="/e/acme-infra/request-access?s=platform">Request access rights</a> <span class="summary">Get time-limited admin rights for a cloud account, with a reason.</span></li>
+</ul>
+</section>
+</main>
+<footer class="bar-bottom">
+<ul class="row footer">
+<li><a class="link" href="https://git.acme.example/acme/acme-app" data-ref="acme-app/repo" id="acme-app/repo"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#git"></use></svg><span class="label">acme-app</span></a></li>
+<li><a class="link" href="https://status.acme.example" data-ref="acme-infra/status-page" id="acme-infra/status-page"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#activity"></use></svg><span class="label">Status</span></a></li>
+</ul>
+<p class="colophon">Firelight v0.0.0-test · <a href="/spec">Format</a> · <a href="/status">Status</a></p>
+</footer>
+<dialog id="palette" class="palette" aria-label="Search">
+<form method="dialog"><input type="search" placeholder="Search or ask…" aria-label="Search" autocomplete="off"></form>
+<ul class="results" role="listbox"></ul>
+<p class="palette-empty" hidden>Nothing found.</p>
+</dialog>
+<dialog id="info" class="info" aria-label="About this Firelight">
+<nav class="tabs" role="tablist">
+<button role="tab" aria-selected="true" data-tab="mcp">Connect MCP</button>
+<button role="tab" aria-selected="false" data-tab="repo">Add a repo</button>
+<button role="tab" aria-selected="false" data-tab="status">Status</button>
+</nav>
+<section data-panel="mcp">
+<p>Give your coding agent every repo's docs. In Claude Code:</p>
+<pre class="copy"><code>claude mcp add --transport http firelight https://firelight.acme.example/mcp</code></pre>
+<p>Any other MCP client:</p>
+<pre class="copy"><code>{&quot;mcpServers&quot;: {&quot;firelight&quot;: {&quot;type&quot;: &quot;http&quot;, &quot;url&quot;: &quot;https://firelight.acme.example/mcp&quot;}}}</code></pre>
+</section>
+<section data-panel="repo" hidden>
+<p>Paste this into a coding agent in the repo you want to add:</p>
+<pre class="copy"><code>Set this repository up for Firelight, the docs your repos write about themselves.
+
+1. Install the Firelight skill: `npx skills add prosperity-solutions/firelight` (or `firelight skills install --project`), then read it: `firelight skills format` and `firelight skills writing`.
+2. Read this repository: what it is, what it is for, how it relates to the other repos it talks to, the links the team opens every day, and the questions people ask about it.
+3. If the Firelight MCP server is connected, call `list_spaces` and `list_repos` first. Contribute to the spaces that already exist before declaring a new one, and use the other repos&#39; ids in refs and relations.
+4. Write `.firelight/`:
+   - `repo.yaml`: id, name, a one-sentence summary, the owner, its spaces, and honest `relations` (&quot;when you do X here, also do Y there&quot;), only the ones that really hold.
+   - `about.md`: the longer version of the summary.
+   - `links.yaml`: the links the team actually uses (environments, consoles, dashboards), placed on existing islands where they fit.
+   - 3 to 10 `concepts/`: what each important thing is, and what it is not.
+   - `guides/` for the tasks people ask about, step by step.
+   - `golden.yaml`: questions people would type, with the entries that must answer them.
+   Keep entries short, one idea each. Write only what you verified in this repository. Leave out anything secret or internal-only: no tokens, no internal hostnames you were not asked to publish, no personal data.
+5. Run `firelight check` and `firelight preview --check` until both pass.
+6. Add one rule to AGENTS.md: &quot;Keep `.firelight/` true in the same PR as the change; run `firelight check` and `firelight preview --check`.&quot;
+7. Add the Firelight GitHub Action to CI (see `firelight skills ci`).
+8. Open a pull request with all of it.</code></pre>
+</section>
+<section data-panel="status" hidden>
+<p>2 repos, 2 spaces. <a href="/status">Full status</a></p>
+</section>
+<form method="dialog"><button>Close</button></form>
+</dialog>
+<dialog id="hidden-dialog" aria-label="Hidden items">
+<h2>Hidden</h2><ul class="hidden-list"></ul>
+<p><button type="button" data-action="reset-hidden">Show everything again</button></p>
+<form method="dialog"><button>Close</button></form>
+</dialog>
+</body>
+</html>

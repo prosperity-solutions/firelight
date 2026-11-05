@@ -9,6 +9,7 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
+firelight-format = { path = "../firelight-format" }
 
 [lints]
 workspace = true

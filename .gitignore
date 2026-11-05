@@ -10,3 +10,6 @@ notes/
 /fuzz/target/
 /fuzz/Cargo.lock
 /fuzz/artifacts/
+/tests/browser/node_modules/
+/tests/browser/test-results/
+/tests/browser/playwright-report/

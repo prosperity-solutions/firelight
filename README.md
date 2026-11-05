@@ -20,6 +20,12 @@ agent. Content never lives in Firelight: git is the truth, Firelight is a lens.
 > autonomous coding agent, following [docs/HANDOVER.md](docs/HANDOVER.md).
 > Nothing is released yet.
 
+## Hack on it
+
+1. Install [Veld](https://veld.oss.life.li).
+2. `veld start firelight` (the acme fixtures, word search only, ready in seconds).
+3. Open the URL it prints. `just test` runs the tests; `firelight preview .` shows any repo's `.firelight/` with live reload.
+
 ## Security
 
 Firelight serves plain HTTP. HTTPS, single sign-on and IP rules belong to a

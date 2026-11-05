@@ -23,5 +23,34 @@ bcf0985284b270fc789d5946c25c6ba76535973d, which in turn ported it from outfit
 
 Their licence is the MIT License, the same as this project's (see LICENSE).
 
-Further credits (the icon set, the installer's structure from outfit) are added
-here in the PR that brings them in.
+The page's icons (web/icons.svg) are from Lucide (https://lucide.dev),
+lucide-static 1.64.0, under the ISC License; the mapping from Firelight's icon
+names is in web/icons.txt:
+
+  ISC License
+
+  Copyright (c) 2026 Lucide Icons and Contributors
+
+  Permission to use, copy, modify, and/or distribute this software for any
+  purpose with or without fee is hereby granted, provided that the above
+  copyright notice and this permission notice appear in all copies.
+
+  THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+  WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+  MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+  ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+  WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+  ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+  OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+Some Lucide icons derive from Feather (https://feathericons.com), under the
+MIT License, Copyright (c) 2013-2023 Cole Bemis; its text is the MIT License
+above.
+
+tests/browser/veld.schema.json is Veld's published config schema v3, from
+https://github.com/prosperity-solutions/veld (MIT License), commit
+66bf20d1c1eb440ab62674e64c637284f64e4bba, vendored so CI can validate
+veld.json without a network fetch.
+
+Further credits (the installer's structure from outfit) are added here in the
+PR that brings them in.

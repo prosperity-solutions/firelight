@@ -1,0 +1,19 @@
+---
+source: crates/firelight-server/tests/pages.rs
+expression: "pages::island_html(&c.0, &island, Some(\"platform\"), &mut Default::default(),\nSome(&good))"
+---
+<section class="island template" data-ref="acme-app/previews" id="island-acme-app/previews">
+<h2>PR previews</h2><button type="button" class="eye" data-hide="acme-app/previews" aria-pressed="false" title="Hide">👁</button>
+<form class="template-form" method="get" action="/i/acme-app/previews">
+<input type="hidden" name="s" value="platform">
+<label>PR # <input name="pr" pattern="[0-9]{1,6}" placeholder="1234" value="42" required autocomplete="off"></label>
+<button type="submit">Open</button>
+</form>
+<p class="help">Only services the PR deployed exist.</p>
+<ul class="links template-links" data-filled="true">
+<li><a class="link" href="https://app-42.preview.acme.example"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#phone"></use></svg><span class="label">App</span></a></li>
+<li><a class="link" href="https://ci.acme.example/previews/42/logs"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#file"></use></svg><span class="label">Logs</span></a></li>
+<li><a class="link" href="https://git.acme.example/acme/acme-app/pulls?id=42"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#git"></use></svg><span class="label">Pull request</span></a></li>
+</ul>
+<p class="template-error" hidden></p>
+</section>

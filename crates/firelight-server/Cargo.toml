@@ -9,14 +9,19 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
-axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "json"] }
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "json", "query"] }
 tokio = { version = "1", features = ["net", "signal", "sync", "macros", "rt-multi-thread", "time"] }
+firelight-format = { path = "../firelight-format" }
+firelight-search = { path = "../firelight-search" }
 firelight-source = { path = "../firelight-source" }
+pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tracing = "0.1"
 thiserror = "2"
 
 [dev-dependencies]
+insta = { version = "1", default-features = false }
 tower = { version = "0.5", features = ["util"] }
 
 [lints]

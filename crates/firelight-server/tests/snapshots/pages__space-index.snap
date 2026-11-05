@@ -1,0 +1,11 @@
+---
+source: crates/firelight-server/tests/pages.rs
+expression: "main_of(&pages::space_index(&ui, c.as_ref()))"
+---
+<main class="space-index">
+<ul class="space-cards">
+<li><a href="/s/platform"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#server"></use></svg><strong>Platform</strong><span>Environments, clusters, access, deploys.</span></a></li>
+<li><a href="/s/support"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#help"></use></svg><strong>Support</strong><span>What the support team needs every day.</span></a></li>
+<li class="all"><a href="/s/all"><strong>All</strong><span>Everything on one page</span></a></li>
+</ul>
+</main>
