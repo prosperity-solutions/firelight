@@ -1,0 +1,8 @@
+format: 1
+type: cards
+title: Environments
+order: 10
+sections: [apps, tools, uses]
+cards:
+  - { id: production, title: Production, order: 10, tone: danger }
+  - { id: staging, title: Staging, order: 20 }

@@ -1,0 +1,31 @@
+# cargo-fuzz targets (docs/HANDOVER.md §13.1). Local only, on the pinned
+# nightly: `cargo +nightly-2026-10-29 fuzz run yaml`. Not part of the workspace;
+# CI runs the seed corpus on stable through crates/firelight-format/tests/fuzz_seeds.rs.
+[package]
+name = "firelight-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+firelight-format = { path = "../crates/firelight-format" }
+
+[[bin]]
+name = "yaml"
+path = "fuzz_targets/yaml.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "markdown"
+path = "fuzz_targets/markdown.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]

@@ -1,0 +1,143 @@
+{
+  "$defs": {
+    "AtYaml": {
+      "additionalProperties": false,
+      "description": "A link's place: `{place: top|footer, space?}`, `{island}` (a links island)\nor `{island, card, section?}` (a cards island).",
+      "properties": {
+        "card": {
+          "default": null,
+          "description": "A card id of that cards island.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "island": {
+          "default": null,
+          "description": "A ref to a links or cards island.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "place": {
+          "default": null,
+          "description": "`top` or `footer`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "section": {
+          "default": null,
+          "description": "One of the cards island's sections.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "space": {
+          "default": null,
+          "description": "With `place`: only this space (default: every space of the link's repo).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "LinkYaml": {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "$ref": "#/$defs/OneOrMany",
+          "description": "Where the link sits: one target or a list of them."
+        },
+        "entry": {
+          "description": "\"What is this?\": a ref to a concept.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "icon": {
+          "description": "A built-in icon name.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "note": {
+          "default": null,
+          "description": "Small grey text after the label.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "order": {
+          "default": null,
+          "description": "Lower first; ties sort by label.",
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "url": {
+          "description": "`https:`, `http:` or `mailto:`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "url",
+        "at"
+      ],
+      "type": "object"
+    },
+    "OneOrMany": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AtYaml"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/AtYaml"
+          },
+          "type": "array"
+        }
+      ],
+      "description": "One value or a list of them."
+    }
+  },
+  "$id": "https://firelight.oss.life.li/schema/v1/links.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "`.firelight/links.yaml`: links this repo owns.",
+  "properties": {
+    "format": {
+      "const": 1,
+      "description": "The format version: always 1."
+    },
+    "links": {
+      "items": {
+        "$ref": "#/$defs/LinkYaml"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "format"
+  ],
+  "title": "Firelight links.yaml (format 1)",
+  "type": "object"
+}

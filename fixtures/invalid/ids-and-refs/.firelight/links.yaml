@@ -1,0 +1,15 @@
+format: 1
+links:
+  - id: Bad_Id
+    label: Bad
+    url: https://a.acme.example
+    at: { place: top }
+  - id: portal
+    label: Portal
+    url: https://portal.acme.example
+    at: { place: top }
+    entry: missing-concept
+  - id: twice
+    label: Twice
+    url: https://t.acme.example
+    at: { place: top }

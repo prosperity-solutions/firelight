@@ -1,0 +1,76 @@
+{
+  "$id": "https://firelight.oss.life.li/schema/v1/entry.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "An entry's front matter (`concepts/*.md`, `guides/*.md`).",
+  "properties": {
+    "aliases": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "covers": {
+      "description": "Paths (globs) this entry describes; changes to them without the entry make it \"maybe stale\".",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "format": {
+      "const": 1,
+      "description": "The format version: always 1."
+    },
+    "id": {
+      "description": "Defaults to the file name without `.md`.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "links": {
+      "description": "Links this entry is about (the \"Show me\" targets).",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "related": {
+      "description": "Related entries.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "spaces": {
+      "description": "Overrides repo.yaml's default spaces.",
+      "items": {
+        "type": "string"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "summary": {
+      "description": "At most 200 characters; search results show it.",
+      "type": "string"
+    },
+    "tags": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "title": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "format",
+    "title",
+    "summary"
+  ],
+  "title": "Firelight entry front matter (format 1)",
+  "type": "object"
+}

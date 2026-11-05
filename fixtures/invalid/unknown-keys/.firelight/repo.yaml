@@ -1,0 +1,5 @@
+format: 1
+id: broken
+name: Broken
+summary: A repo with mistakes in it, for the tests.
+sumary: typo

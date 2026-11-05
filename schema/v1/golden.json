@@ -1,0 +1,62 @@
+{
+  "$defs": {
+    "QuestionYaml": {
+      "additionalProperties": false,
+      "properties": {
+        "expect": {
+          "description": "Refs that must each be in the top `within` results.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "needs": {
+          "description": "`meaning`: needs meaning search; skipped when the embedder is off.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "query": {
+          "type": "string"
+        },
+        "within": {
+          "description": "Default 5.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "query",
+        "expect"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://firelight.oss.life.li/schema/v1/golden.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "`.firelight/golden.yaml`: questions that must find their entries.",
+  "properties": {
+    "format": {
+      "const": 1,
+      "description": "The format version: always 1."
+    },
+    "questions": {
+      "items": {
+        "$ref": "#/$defs/QuestionYaml"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "format",
+    "questions"
+  ],
+  "title": "Firelight golden.yaml (format 1)",
+  "type": "object"
+}

@@ -1,0 +1,14 @@
+---
+source: crates/firelight-format/tests/fixtures.rs
+expression: out
+---
+invalid/ids-and-refs/.firelight/guides/refs.md:5:9: error: link "nope" does not exist in this repo
+invalid/ids-and-refs/.firelight/guides/refs.md:6:11: error: entry "also-nope" does not exist in this repo
+invalid/ids-and-refs/.firelight/guides/refs.md:6:22: error: "a/b/c" is not a ref: write an id like `argocd` (this repo) or `infra-repo/argocd` (another repo)
+invalid/ids-and-refs/.firelight/guides/refs.md:8:5: error: entry "nope" does not exist in this repo
+invalid/ids-and-refs/.firelight/guides/refs.md:8:33: error: link "missing" does not exist in this repo
+invalid/ids-and-refs/.firelight/guides/refs.md:8:63: warning: entry "twice" has no heading #no-such-heading
+invalid/ids-and-refs/.firelight/links.yaml:3:9: error: "Bad_Id" is not a valid link id: use lowercase letters, digits and dashes, starting with a letter or digit, at most 63 characters
+invalid/ids-and-refs/.firelight/links.yaml:11:12: error: entry "missing-concept" does not exist in this repo
+invalid/ids-and-refs/.firelight/links.yaml:12:9: error: id "twice" is already used by .firelight/concepts/twice.md:1; ids are unique per repo across concepts, guides, links and islands
+invalid/ids-and-refs/.firelight/guides/refs.md:5:15: warning: link other-repo/thing does not resolve: repo "other-repo" is not connected to this Firelight; shown as plain text

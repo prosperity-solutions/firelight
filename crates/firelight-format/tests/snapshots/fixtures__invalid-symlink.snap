@@ -1,0 +1,5 @@
+---
+source: crates/firelight-format/tests/fixtures.rs
+expression: out
+---
+invalid/symlink/.firelight/guides/linked.md: error: symlinks are refused in .firelight/; copy the file instead

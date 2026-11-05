@@ -207,11 +207,16 @@ jobs:
         run: cargo fmt --all --check
       - name: cargo clippy
         run: cargo clippy --locked --workspace --all-targets -- -D warnings
-      - name: docs/config.md is generated from the config keys
+      - name: Generated docs and schemas are current (docs/config.md, schema/v1)
         run: |
           cargo run --locked -q --bin firelight -- config reference > "$RUNNER_TEMP/config.md"
           if ! diff -u docs/config.md "$RUNNER_TEMP/config.md"; then
-            echo "docs/config.md is stale. Run: just schema"
+            echo "docs/config.md is stale. Run: scripts/dev/t just schema"
+            exit 1
+          fi
+          cargo run --locked -q --bin firelight -- schema --out "$RUNNER_TEMP/schema"
+          if ! diff -ru schema/v1 "$RUNNER_TEMP/schema"; then
+            echo "schema/v1 is stale. Run: scripts/dev/t just schema"
             exit 1
           fi
       - name: No real IDs in tracked files

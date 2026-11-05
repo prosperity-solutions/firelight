@@ -1,0 +1,10 @@
+format: 1
+questions:
+  - query: how do I get admin rights
+    expect: [request-access]
+    within: 3
+  - query: wie bekomme ich adminrechte
+    expect: [request-access]
+    needs: meaning
+  - query: what is argo
+    expect: [argocd]

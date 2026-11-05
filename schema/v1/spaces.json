@@ -1,0 +1,63 @@
+{
+  "$defs": {
+    "SpaceYaml": {
+      "additionalProperties": false,
+      "properties": {
+        "icon": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "order": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "summary": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://firelight.oss.life.li/schema/v1/spaces.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "`.firelight/spaces.yaml`: spaces this repo declares.",
+  "properties": {
+    "format": {
+      "const": 1,
+      "description": "The format version: always 1."
+    },
+    "spaces": {
+      "items": {
+        "$ref": "#/$defs/SpaceYaml"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "format",
+    "spaces"
+  ],
+  "title": "Firelight spaces.yaml (format 1)",
+  "type": "object"
+}

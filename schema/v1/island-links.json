@@ -1,0 +1,50 @@
+{
+  "$id": "https://firelight.oss.life.li/schema/v1/island-links.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "const": 1,
+      "description": "The format version: always 1."
+    },
+    "id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "order": {
+      "default": null,
+      "format": "int64",
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "place": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "space": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "title": {
+      "type": "string"
+    },
+    "type": {
+      "const": "links"
+    }
+  },
+  "required": [
+    "format",
+    "type",
+    "title"
+  ],
+  "title": "Firelight island, type: links (format 1)",
+  "type": "object"
+}

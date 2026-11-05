@@ -1,0 +1,32 @@
+---
+source: crates/firelight-format/tests/fixtures.rs
+expression: s
+---
+acme-infra/access-model concept "Access model" spaces=["platform", "support"] aliases=["permissions", "roles", "rbac"] covers=["terraform/access/**"]
+  h2 "What it is not" #what-it-is-not
+  ref Link acme-infra/access-portal at 13:17
+acme-infra/argocd concept "Argo CD" spaces=["platform"] aliases=["argo", "gitops", "deployments"] covers=[]
+  h2 "What it is not" #what-it-is-not
+  ref Link acme-infra/argo-staging at 10:1
+  ref Entry { heading: None } acme-app/deploy-an-app at 15:1
+acme-infra/request-access guide "Request access rights" spaces=["platform", "support"] aliases=["just-in-time access", "elevate", "admin rights"] covers=["terraform/access/**"]
+  h2 "What it does not do" #what-it-does-not-do
+  ref Link acme-infra/access-portal at 12:9
+  ref Entry { heading: Some("what-it-is-not") } acme-infra/access-model at 19:1
+acme-infra golden "how do I get admin rights" within 3 meaning=false expect ["acme-infra/request-access"]
+acme-infra golden "wie bekomme ich adminrechte" within 5 meaning=true expect ["acme-infra/request-access"]
+acme-infra golden "what is argo" within 5 meaning=false expect ["acme-infra/argocd"]
+acme-app/release-train concept "Release train" spaces=["platform"] aliases=["releases", "shipping days"] covers=[]
+  h2 "What it is not" #what-it-is-not
+  ref Entry { heading: Some("hotfixes") } acme-app/deploy-an-app at 14:49
+acme-app/deploy-an-app guide "Deploy the app" spaces=["platform"] aliases=["deploy", "ship", "rollout"] covers=["deploy/**", "Dockerfile"]
+  h2 "Hotfixes" #hotfixes
+  ref Link acme-infra/argo-staging at 12:30
+  ref Link acme-app/app-staging at 13:10
+  ref Entry { heading: None } acme-app/release-train at 14:40
+acme-app/onboarding guide "Onboarding" spaces=["platform", "support"] aliases=["first day", "new joiner"] covers=[]
+  ref Entry { heading: None } acme-infra/request-access at 10:12
+  ref Link acme-app/team-chat at 11:9
+  ref Entry { heading: None } acme-app/deploy-an-app at 12:26
+acme-app golden "how do I deploy" within 3 meaning=false expect ["acme-app/deploy-an-app"]
+acme-app golden "when does the release train leave" within 5 meaning=false expect ["acme-app/release-train"]

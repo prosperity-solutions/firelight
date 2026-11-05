@@ -39,7 +39,7 @@ fn scripts_are_executable() {
         let Ok(bytes) = std::fs::read(root().join(f[3])) else {
             continue;
         };
-        if bytes.starts_with(b"#!") && f[0] != "100755" {
+        if bytes.starts_with(b"#!/") && f[0] != "100755" {
             bad.push(format!("{} (git update-index --chmod=+x {})", f[3], f[3]));
         }
     }

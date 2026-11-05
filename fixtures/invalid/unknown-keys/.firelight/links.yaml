@@ -1,0 +1,7 @@
+format: 1
+links:
+  - id: a
+    label: A
+    url: https://a.acme.example
+    at: { place: top }
+    colour: red

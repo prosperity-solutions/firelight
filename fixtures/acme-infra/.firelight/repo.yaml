@@ -1,0 +1,13 @@
+format: 1
+id: acme-infra
+name: Infra
+summary: Terraform and Helm for the clusters every Acme app runs on.
+owner: Platform team
+spaces: [platform]
+relations:
+  - repo: acme-app
+    when: A new app is added there
+    then: Add its Helm release in `releases/` and its DNS name in `dns/`
+  - repo: acme-app
+    when: You change an egress rule here
+    then: Tell the app owners; their staging deploy may start failing

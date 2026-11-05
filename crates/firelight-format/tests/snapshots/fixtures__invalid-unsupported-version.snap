@@ -1,0 +1,5 @@
+---
+source: crates/firelight-format/tests/fixtures.rs
+expression: out
+---
+invalid/unsupported-version/.firelight/repo.yaml:1:9: error: format 2 is not one this Firelight reads (1). The whole source is skipped until it is updated or Firelight is upgraded
