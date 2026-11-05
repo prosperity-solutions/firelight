@@ -409,7 +409,8 @@ jobs:
           # read-only root filesystem.
           docker run -d --name fl --read-only -p 127.0.0.1:8080:8080 \
             -e FIRELIGHT_SERVER_PUBLIC_URL=http://localhost:8080 \
-            -e FIRELIGHT_AUTH_UI=none -e FIRELIGHT_AUTH_MCP=none firelight:ci
+            -e FIRELIGHT_AUTH_UI=none -e FIRELIGHT_AUTH_MCP=none \
+            -e FIRELIGHT_EMBEDDER=off firelight:ci
           ok=""
           for _ in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:8080/readyz; then ok=1; break; fi
