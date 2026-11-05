@@ -9,7 +9,9 @@ fn hardening_keeps_zero_approvals() {
     assert!(s.contains("\"required_approving_review_count\": 0"));
     assert!(s.contains("\"require_extra_approval_for_unattributed_changes\": false"));
     assert!(s.contains("\"bypass_actors\": []"));
-    assert!(s.contains("required_signatures"));
+    // Not required_signatures: decided with the owner at M1 (PR commits are
+    // unsigned; main only gets GitHub-signed squash merges).
+    assert!(!s.contains("{\"type\": \"required_signatures\"}"));
 }
 
 use harness::{TempDir, fake_id, read, root};

@@ -143,7 +143,11 @@ fi
 
 # --- 4. Rulesets (after going public) ---------------------------------------
 
-step "Ruleset main: PR required, all-green required, branch up to date, signed commits, no bypass"
+step "Ruleset main: PR required, all-green required, branch up to date, no bypass"
+# No required_signatures: GitHub checks it against the PR's own commits too,
+# which an agent without the owner's signing key can't sign. Every commit on
+# main is a squash merge, which GitHub signs, because nothing else can land
+# there (PR required, no bypass actors). Decided with the owner at M1.
 # require_extra_approval_for_unattributed_changes is stated as false: GitHub
 # turns it on when a ruleset omits it, and its extra approval must come from
 # someone other than the PR author, which a sole owner can never give
@@ -160,7 +164,6 @@ ruleset main "$(cat <<EOF
  "rules": [
   {"type": "deletion"},
   {"type": "non_fast_forward"},
-  {"type": "required_signatures"},
   {"type": "pull_request", "parameters": {
     "required_approving_review_count": 0, "require_code_owner_review": false,
     "dismiss_stale_reviews_on_push": false, "require_last_push_approval": false,

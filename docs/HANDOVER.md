@@ -669,7 +669,7 @@ Every rule here is **asserted by a test or a CI check**, never only written down
 - Secret scanning + push protection; private vulnerability reporting; Dependabot alerts + security updates.
 - Immutable releases.
 - Fork PRs: approval required for all external contributors.
-- **Ruleset `main`:** default branch, **no bypass actors**; block deletion and force-push; require a PR (0 approvals during the run, squash only, conversation resolution required); required status check `all-green` (strict); **require signed commits** (applied after bootstrap with the other rulesets; GitHub signs squash merges, so every later commit on `main` qualifies).
+- **Ruleset `main`:** default branch, **no bypass actors**; block deletion and force-push; require a PR (0 approvals during the run, squash only, conversation resolution required); required status check `all-green` (strict). **No "require signed commits" rule** (settled with the owner at M1): GitHub applies it to the PR's own commits, which the agent can't sign without the owner's key, so it blocked every merge. Every commit on `main` is still a GitHub-signed squash merge, because nothing else can land there. The ruleset also states `require_extra_approval_for_unattributed_changes: false`, which GitHub otherwise turns on and which no sole owner can satisfy.
 - **Ruleset `tags-v`:** `refs/tags/v*`; block update and deletion. Roll forward only.
 - **Environments:** `github-pages` only (main only, custom domain `firelight.oss.life.li`, HTTPS enforced).
 - Labels: `build-tracker`, `needs-maintainer`, `no-ship`.
