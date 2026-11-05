@@ -198,7 +198,9 @@ fn budgets() {
 
 #[tokio::test]
 async fn routes_and_headers() {
-    let state = AppState::new().with_content(acme(), ui(), "#123abc");
+    let state = AppState::new()
+        .with_content(acme(), ui(), "#123abc")
+        .with_access(firelight_server::auth::Access::open());
     let get = |p: &str| {
         let s = state.clone();
         let p = p.to_string();
@@ -273,20 +275,28 @@ async fn routes_and_headers() {
 async fn default_space_redirects_and_falls_back() {
     let mut u = ui();
     u.default_space = Some("support".into());
-    let r = router(AppState::new().with_content(acme(), u, "#d9541e"))
-        .oneshot(Request::get("/").body(Body::empty()).unwrap_or_default())
-        .await
-        .unwrap_or_else(|e| match e {});
+    let r = router(
+        AppState::new()
+            .with_content(acme(), u, "#d9541e")
+            .with_access(firelight_server::auth::Access::open()),
+    )
+    .oneshot(Request::get("/").body(Body::empty()).unwrap_or_default())
+    .await
+    .unwrap_or_else(|e| match e {});
     assert_eq!(
         r.headers().get("location").and_then(|v| v.to_str().ok()),
         Some("/s/support")
     );
     let mut u = ui();
     u.default_space = Some("gone".into());
-    let r = router(AppState::new().with_content(acme(), u, "#d9541e"))
-        .oneshot(Request::get("/").body(Body::empty()).unwrap_or_default())
-        .await
-        .unwrap_or_else(|e| match e {});
+    let r = router(
+        AppState::new()
+            .with_content(acme(), u, "#d9541e")
+            .with_access(firelight_server::auth::Access::open()),
+    )
+    .oneshot(Request::get("/").body(Body::empty()).unwrap_or_default())
+    .await
+    .unwrap_or_else(|e| match e {});
     assert_eq!(
         r.status(),
         StatusCode::OK,

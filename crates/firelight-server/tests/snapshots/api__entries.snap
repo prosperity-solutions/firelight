@@ -1,0 +1,46 @@
+---
+source: crates/firelight-server/tests/api.rs
+expression: "serde_json::to_string_pretty(&v).unwrap_or_default()"
+---
+{
+  "entries": [
+    {
+      "commit": null,
+      "kind": "guide",
+      "permalink": "https://firelight.acme.example/e/acme-infra/request-access",
+      "ref": "acme-infra/request-access",
+      "repo": "acme-infra",
+      "summary": "Get time-limited admin rights for a cloud account, with a reason.",
+      "tags": [
+        "access",
+        "cloud"
+      ],
+      "title": "Request access rights"
+    },
+    {
+      "commit": null,
+      "kind": "guide",
+      "permalink": "https://firelight.acme.example/e/acme-app/deploy-an-app",
+      "ref": "acme-app/deploy-an-app",
+      "repo": "acme-app",
+      "summary": "From a merged pull request to the app running in staging and production.",
+      "tags": [
+        "deploy"
+      ],
+      "title": "Deploy the app"
+    },
+    {
+      "commit": null,
+      "kind": "guide",
+      "permalink": "https://firelight.acme.example/e/acme-app/onboarding",
+      "ref": "acme-app/onboarding",
+      "repo": "acme-app",
+      "summary": "Your first day on the app team: accounts, access, and your first deploy.",
+      "tags": [
+        "team"
+      ],
+      "title": "Onboarding"
+    }
+  ],
+  "space": "all"
+}

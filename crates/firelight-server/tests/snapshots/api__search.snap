@@ -1,0 +1,44 @@
+---
+source: crates/firelight-server/tests/api.rs
+expression: "serde_json::to_string_pretty(&v).unwrap_or_default()"
+---
+{
+  "hits": [
+    {
+      "commit": null,
+      "heading": "What it does not do",
+      "kind": "guide",
+      "permalink": "https://firelight.acme.example/e/acme-infra/request-access#what-it-does-not-do",
+      "ref": "acme-infra/request-access",
+      "repo": "acme-infra",
+      "score": 0.01639344262295082,
+      "stale": false,
+      "summary": "Get time-limited admin rights for a cloud account, with a reason.",
+      "title": "Request access rights"
+    },
+    {
+      "commit": null,
+      "kind": "concept",
+      "permalink": "https://firelight.acme.example/e/acme-infra/access-model",
+      "ref": "acme-infra/access-model",
+      "repo": "acme-infra",
+      "score": 0.016129032258064516,
+      "stale": false,
+      "summary": "Who may do what in Acme's cloud accounts, and how admin rights are granted for a limited time.",
+      "title": "Access model"
+    },
+    {
+      "commit": null,
+      "kind": "link",
+      "permalink": "https://firelight.acme.example/s/all#acme-infra/access-portal",
+      "ref": "acme-infra/access-portal",
+      "repo": "acme-infra",
+      "score": 0.015873015873015872,
+      "summary": "",
+      "title": "Access",
+      "url": "https://access.acme.example"
+    }
+  ],
+  "query": "admin rights",
+  "space": "all"
+}

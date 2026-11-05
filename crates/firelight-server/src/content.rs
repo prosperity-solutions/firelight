@@ -52,6 +52,11 @@ pub trait Content: Send + Sync {
     /// Search the served catalog (§9). Blocking: it may embed the query, so
     /// async callers use `spawn_blocking`.
     fn search(&self, query: &str, filter: &Filter, limit: usize) -> Vec<Hit>;
+    /// The status (§16.1) as JSON: what `/api/v1/status` and MCP `status`
+    /// return. Secrets never appear in it.
+    fn status(&self) -> serde_json::Value {
+        serde_json::json!({ "sources": [] })
+    }
     fn search_info(&self) -> SearchInfo {
         SearchInfo {
             backend: "off".into(),

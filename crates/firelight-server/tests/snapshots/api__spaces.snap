@@ -1,0 +1,65 @@
+---
+source: crates/firelight-server/tests/api.rs
+expression: "serde_json::to_string_pretty(&v).unwrap_or_default()"
+---
+{
+  "conflicts": [],
+  "spaces": [
+    {
+      "counts": {
+        "entries": 6,
+        "islands": 4,
+        "links": 14
+      },
+      "declared_by": [
+        "acme-infra"
+      ],
+      "id": "platform",
+      "permalink": "https://firelight.acme.example/s/platform",
+      "repos": [
+        "acme-app",
+        "acme-infra"
+      ],
+      "sources": [
+        {
+          "commit": null,
+          "repo": "acme-app"
+        },
+        {
+          "commit": null,
+          "repo": "acme-infra"
+        }
+      ],
+      "summary": "Environments, clusters, access, deploys.",
+      "title": "Platform"
+    },
+    {
+      "counts": {
+        "entries": 3,
+        "islands": 0,
+        "links": 2
+      },
+      "declared_by": [
+        "acme-infra"
+      ],
+      "id": "support",
+      "permalink": "https://firelight.acme.example/s/support",
+      "repos": [
+        "acme-app",
+        "acme-infra"
+      ],
+      "sources": [
+        {
+          "commit": null,
+          "repo": "acme-app"
+        },
+        {
+          "commit": null,
+          "repo": "acme-infra"
+        }
+      ],
+      "summary": "What the support team needs every day.",
+      "title": "Support"
+    }
+  ]
+}
