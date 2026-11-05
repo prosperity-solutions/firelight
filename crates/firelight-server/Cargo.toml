@@ -17,6 +17,7 @@ firelight-source = { path = "../firelight-source" }
 base64 = "0.22"
 sha2 = "0.10"
 url = "2"
+opentelemetry = { version = "0.33", default-features = false, features = ["metrics"] }
 rmcp = { version = "=3.8.0", default-features = false, features = ["server", "transport-streamable-http-server"] }
 schemars = "1"
 pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }

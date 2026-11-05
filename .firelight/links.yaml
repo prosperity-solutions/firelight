@@ -1,0 +1,27 @@
+format: 1
+links:
+  - id: website
+    label: Website
+    url: https://firelight.oss.life.li
+    note: install, the onboarding prompt, connecting an agent
+    icon: globe
+    at: { island: start }
+  - id: source
+    label: Source
+    url: https://github.com/prosperity-solutions/firelight
+    note: the code, issues and releases
+    icon: git
+    at: { island: start }
+  - id: releases
+    label: Releases
+    url: https://github.com/prosperity-solutions/firelight/releases
+    note: binaries, checksums, the changelog
+    icon: package
+    at: { island: start }
+  - id: format-spec
+    label: Format reference
+    url: https://github.com/prosperity-solutions/firelight/blob/main/docs/format.md
+    note: every file and field of .firelight/
+    icon: file
+    at: { island: start }
+    entry: firelight-folder

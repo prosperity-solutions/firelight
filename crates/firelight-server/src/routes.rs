@@ -124,7 +124,9 @@ async fn search(
     };
     let json = q.get("format").map(String::as_str) == Some("json");
     let ui = state.ui.clone();
+    let span = tracing::Span::current();
     let res = tokio::task::spawn_blocking(move || {
+        let _in = span.enter();
         if json {
             axum::Json(pages::search_json(content.as_ref(), &space, &query)).into_response()
         } else {

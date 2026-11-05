@@ -1,0 +1,135 @@
+#!/bin/sh
+# Install the Firelight CLI (docs/install.md, docs/HANDOVER.md §11.1).
+#
+#   curl -fsSL https://firelight.oss.life.li/install.sh | sh
+#   curl -fsSL https://firelight.oss.life.li/install.sh | sh -s -- --version v1.2.3
+#
+# The SHA-256 of every published archive is baked into this script (the table
+# at the end), taken from each release's SHA256SUMS after its GitHub
+# attestation was verified. A download that doesn't match is deleted and
+# nothing is installed. When `gh` is installed and logged in, the archive's
+# attestation is verified as well. Never uses sudo; never edits shell profiles.
+#
+# Needs: curl or wget, tar, and sha256sum or shasum.
+#
+# Environment:
+#   FIRELIGHT_INSTALL_DIR                  Where the binary goes (default ~/.local/bin).
+#   FIRELIGHT_INSTALL_REQUIRE_ATTESTATION  1: fail unless `gh attestation verify` ran and passed.
+#   FIRELIGHT_INSTALL_BASE_URL             Download base (default the GitHub releases). For tests.
+
+set -eu
+
+REPO=prosperity-solutions/firelight
+BASE_URL=${FIRELIGHT_INSTALL_BASE_URL:-https://github.com/$REPO/releases/download}
+INSTALL_DIR=${FIRELIGHT_INSTALL_DIR:-$HOME/.local/bin}
+REQUIRE_ATTESTATION=${FIRELIGHT_INSTALL_REQUIRE_ATTESTATION:-0}
+
+say() { printf 'firelight install: %s\n' "$*"; }
+die() { printf 'firelight install: %s\n' "$*" >&2; exit 1; }
+
+version=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --version) [ $# -ge 2 ] || die "--version needs a value like v1.2.3"; version=$2; shift 2 ;;
+    --version=*) version=${1#--version=}; shift ;;
+    -h|--help) sed -n '2,20p' "$0" 2>/dev/null || true; exit 0 ;;
+    *) die "unknown option: $1" ;;
+  esac
+done
+
+# The table: "version archive sha256", one per line, newest release last.
+table() {
+  cat <<'TABLE'
+@@TABLE@@
+TABLE
+}
+
+if [ -z "$version" ]; then
+  version=$(table | awk 'NF==3 {v=$1} END {print v}')
+  [ -n "$version" ] || die "this script knows no releases yet"
+fi
+case "$version" in
+  v[0-9]*.[0-9]*.[0-9]*) ;;
+  *) die "version must look like v1.2.3, not '$version'" ;;
+esac
+
+case "$(uname -s)" in
+  Linux) os=linux ;;
+  Darwin) os=macos ;;
+  *) die "unsupported OS $(uname -s); download a release by hand" ;;
+esac
+case "$(uname -m)" in
+  x86_64|amd64) arch=amd64 ;;
+  arm64|aarch64) arch=arm64 ;;
+  *) die "unsupported CPU $(uname -m)" ;;
+esac
+
+archive="firelight-$version-$os-$arch.tar.gz"
+expected=$(table | awk -v v="$version" -v a="$archive" '$1==v && $2==a {print $3}')
+if [ -z "$expected" ]; then
+  if table | awk -v v="$version" '$1==v {f=1} END {exit !f}'; then
+    die "release $version has no $os-$arch build"
+  fi
+  die "unknown version $version (known: $(table | awk 'NF==3 {print $1}' | uniq | tr '\n' ' '))"
+fi
+
+if command -v sha256sum >/dev/null 2>&1; then
+  sha() { sha256sum "$1" | awk '{print $1}'; }
+elif command -v shasum >/dev/null 2>&1; then
+  sha() { shasum -a 256 "$1" | awk '{print $1}'; }
+else
+  die "needs sha256sum or shasum to check the download; install one (coreutils or perl) and run again"
+fi
+
+tmp=$(mktemp -d 2>/dev/null || mktemp -d -t firelight)
+trap 'rm -rf "$tmp"' EXIT INT TERM
+
+url="$BASE_URL/$version/$archive"
+say "downloading $url"
+# HTTPS only (redirects too), unless a test or mirror sets the base URL.
+proto='=https'
+[ -n "${FIRELIGHT_INSTALL_BASE_URL:-}" ] && proto='=https,http'
+if command -v curl >/dev/null 2>&1; then
+  curl -fsSL --proto "$proto" --proto-redir "$proto" -o "$tmp/$archive" "$url" || die "download failed: $url"
+elif command -v wget >/dev/null 2>&1; then
+  case "$url" in https://*|http://127.0.0.1*|http://localhost*) ;; *) [ -n "${FIRELIGHT_INSTALL_BASE_URL:-}" ] || die "refusing a non-https download: $url" ;; esac
+  wget -q -O "$tmp/$archive" "$url" || die "download failed: $url"
+else
+  die "needs curl or wget"
+fi
+
+actual=$(sha "$tmp/$archive")
+if [ "$actual" != "$expected" ]; then
+  rm -f "$tmp/$archive"
+  die "checksum mismatch for $archive: expected $expected, got $actual. Nothing was installed."
+fi
+say "checksum ok ($expected)"
+
+attested=0
+if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+  if gh attestation verify "$tmp/$archive" --repo "$REPO" \
+    --signer-workflow "$REPO/.github/workflows/ci.yml" \
+    --source-ref refs/heads/main --deny-self-hosted-runners >/dev/null; then
+    attested=1
+    say "attestation ok"
+  else
+    rm -f "$tmp/$archive"
+    die "gh attestation verify failed for $archive. Nothing was installed."
+  fi
+fi
+if [ "$REQUIRE_ATTESTATION" = 1 ] && [ "$attested" != 1 ]; then
+  die "FIRELIGHT_INSTALL_REQUIRE_ATTESTATION=1 but gh is missing or not logged in (gh auth login)"
+fi
+
+# Release archives hold firelight-<version>-<os>-<arch>/firelight.
+member="firelight-$version-$os-$arch/firelight"
+(cd "$tmp" && tar -xzf "$archive" "$member") || die "the archive has no $member"
+mkdir -p "$INSTALL_DIR"
+chmod 0755 "$tmp/$member"
+mv -f "$tmp/$member" "$INSTALL_DIR/firelight"
+say "installed $version to $INSTALL_DIR/firelight"
+
+case ":$PATH:" in
+  *":$INSTALL_DIR:"*) ;;
+  *) say "add $INSTALL_DIR to your PATH, e.g. export PATH=\"$INSTALL_DIR:\$PATH\"" ;;
+esac

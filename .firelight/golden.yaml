@@ -4,3 +4,19 @@ questions:
     expect: [check-a-repo]
   - query: what is the .firelight folder
     expect: [firelight-folder]
+  - query: how do I connect claude code
+    expect: [connect-an-agent]
+  - query: what is a space
+    expect: [spaces]
+  - query: add a new repo to firelight
+    expect: [onboard-a-repo]
+  - query: how do I run firelight in kubernetes
+    expect: [run-firelight]
+  - query: my docs are out of date
+    expect: [covers]
+    needs: meaning
+  - query: wie verbinde ich meinen coding agent
+    expect: [connect-an-agent]
+    needs: meaning
+  - query: run firelight with docker compose and tls
+    expect: [self-hosting]

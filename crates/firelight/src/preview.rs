@@ -238,6 +238,101 @@ fn embed_config(flag: Option<&str>) -> anyhow::Result<crate::search::EmbedConfig
     })
 }
 
+/// `firelight preview --check [DIR…]` (§12.1, §12.2): build everything
+/// `serve` would (validation, refs, islands, chunks, embeddings) and run each
+/// repo's golden questions; print a report; exit 1 on any error or failing
+/// question. No server, no database.
+pub fn check(dirs: Vec<PathBuf>, embedder: Option<&str>) -> anyhow::Result<std::process::ExitCode> {
+    use firelight_search::golden::{self, Outcome};
+    use firelight_search::{Filter, Index};
+    let (diags, cat) = crate::check::collect(&dirs, false);
+    let errors = diags
+        .iter()
+        .filter(|d| d.severity == firelight_format::Severity::Error)
+        .count();
+    for d in &diags {
+        println!("{d}");
+    }
+    let cat = Arc::new(cat);
+    let embed = embed_config(embedder)?;
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+    let emb = rt
+        .block_on(crate::search::load_embedder(&embed))
+        .map_err(|e| anyhow::anyhow!("the embedder can't start: {e}. Try --embedder off"))?;
+    let idx = match &emb {
+        Some(e) => {
+            let e2 = e.clone();
+            Index::build(cat.clone(), Some(e.id()), e.max_tokens(), &move |t| {
+                e2.count_tokens(t)
+            })
+        }
+        None => Index::words_only(cat.clone()),
+    }
+    .map_err(|e| anyhow::anyhow!("cannot build the index: {e}"))?;
+    if let Some(e) = &emb {
+        let missing = idx.missing();
+        for batch in missing.chunks(16) {
+            let texts: Vec<&str> = batch.iter().map(|(_, t)| t.as_str()).collect();
+            let vecs = e
+                .embed_documents(&texts)
+                .map_err(|x| anyhow::anyhow!("embedding failed: {x}"))?;
+            idx.set_vectors(&batch.iter().map(|(h, _)| *h).zip(vecs).collect());
+        }
+    }
+    let (embedded, chunks) = idx.coverage();
+    let qs: Vec<(String, firelight_format::GoldenQuestion)> = cat
+        .repos
+        .iter()
+        .flat_map(|r| r.golden.iter().map(move |q| (r.id.clone(), q.clone())))
+        .collect();
+    let qerr = std::sync::Mutex::new(None);
+    let results = golden::run(&idx, &qs, &Filter::default(), &|q| {
+        emb.as_ref().and_then(|e| match e.embed_query(q) {
+            Ok(v) => Some(v),
+            Err(x) => {
+                if let Ok(mut q) = qerr.lock() {
+                    *q = Some(x.to_string());
+                }
+                None
+            }
+        })
+    });
+    if let Some(e) = qerr.into_inner().ok().flatten() {
+        anyhow::bail!("embedding a golden question failed: {e}");
+    }
+    let failed = results.iter().filter(|r| r.failed()).count();
+    let skipped = results
+        .iter()
+        .filter(|r| r.outcome == Outcome::Skipped)
+        .count();
+    for r in &results {
+        match r.outcome {
+            Outcome::Pass => println!("✓ {}: {}", r.repo, golden::describe(r)),
+            Outcome::Skipped => println!("- {}: {}", r.repo, golden::describe(r)),
+            Outcome::Fail { .. } => println!("✗ {}: {}", r.repo, golden::describe(r)),
+        }
+    }
+    println!(
+        "{} {} repo(s): {errors} error(s), {} warning(s); {chunks} chunks ({embedded} embedded, embedder {}); golden questions: {} passed, {failed} failed, {skipped} skipped.",
+        if errors == 0 && failed == 0 {
+            "✓"
+        } else {
+            "✗"
+        },
+        cat.repos.len(),
+        diags.len() - errors,
+        emb.as_ref().map_or("off".to_string(), |e| e.id()),
+        results.len() - failed - skipped,
+    );
+    Ok(if errors > 0 || failed > 0 {
+        std::process::ExitCode::from(1)
+    } else {
+        std::process::ExitCode::SUCCESS
+    })
+}
+
 #[cfg(test)]
 mod listen_tests {
     #[test]

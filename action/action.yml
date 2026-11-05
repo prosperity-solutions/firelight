@@ -1,0 +1,102 @@
+# The Firelight GitHub Action (docs/HANDOVER.md §12.3): keeps a repo's
+# .firelight/ true in its own CI. Pin it by commit:
+#
+#   - uses: actions/checkout@<sha> # vX
+#     with: { fetch-depth: 0 }          # `covers` needs history
+#   - uses: prosperity-solutions/firelight/action@<sha> # vX.Y.Z
+#     with: { version: vX.Y.Z }
+#
+# It downloads that release's binary, checks it against SHA256SUMS and its
+# GitHub attestation, then runs `firelight check`, `firelight preview --check`
+# and, on pull requests, `firelight covers`. Each step's output goes into the
+# job summary.
+name: Firelight
+description: Check a repo's .firelight/ docs, run its golden questions, and flag maybe-stale entries.
+author: prosperity-solutions
+branding:
+  icon: book-open
+  color: orange
+
+inputs:
+  version:
+    description: The Firelight release to use, like v0.3.0.
+    required: true
+  directory:
+    description: The repo folder holding .firelight/.
+    default: "."
+  embedder:
+    description: "`off` (default, fast) or `candle` to run golden questions with meaning search (the model is cached)."
+    default: "off"
+  strict-covers:
+    description: "`true` fails the job when a covered path changed without its entry."
+    default: "false"
+  binary:
+    description: For Firelight's own CI only - a firelight binary to use instead of a release.
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Install Firelight
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        BINARY: ${{ inputs.binary }}
+        DEST: ${{ runner.temp }}/firelight-bin
+        GH_TOKEN: ${{ github.token }}
+      run: sh "$GITHUB_ACTION_PATH/install.sh"
+
+    - name: Cache the model
+      if: inputs.embedder == 'candle'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/firelight/models
+        key: firelight-model-${{ inputs.version }}
+
+    - name: firelight check
+      shell: bash
+      env:
+        DIR: ${{ inputs.directory }}
+      run: |
+        set -o pipefail
+        { echo '### firelight check'; echo '~~~~~~~~~~'; } >> "$GITHUB_STEP_SUMMARY"
+        status=0
+        "$RUNNER_TEMP/firelight-bin/firelight" check "$DIR" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || status=$?
+        echo '~~~~~~~~~~' >> "$GITHUB_STEP_SUMMARY"
+        exit "$status"
+
+    - name: firelight preview --check
+      shell: bash
+      env:
+        DIR: ${{ inputs.directory }}
+        EMBEDDER: ${{ inputs.embedder }}
+      run: |
+        set -o pipefail
+        { echo '### firelight preview --check'; echo '~~~~~~~~~~'; } >> "$GITHUB_STEP_SUMMARY"
+        status=0
+        "$RUNNER_TEMP/firelight-bin/firelight" preview --check --embedder "$EMBEDDER" "$DIR" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || status=$?
+        echo '~~~~~~~~~~' >> "$GITHUB_STEP_SUMMARY"
+        exit "$status"
+
+    - name: firelight covers
+      if: github.event_name == 'pull_request'
+      shell: bash
+      env:
+        DIR: ${{ inputs.directory }}
+        BASE_REF: ${{ github.base_ref }}
+        STRICT: ${{ inputs.strict-covers }}
+      run: |
+        set -o pipefail
+        git -C "$DIR" fetch --quiet --no-tags origin "$BASE_REF" || true
+        flag=""
+        if [ "$STRICT" = "true" ]; then flag="--strict"; fi
+        { echo '### firelight covers'; echo '~~~~~~~~~~'; } >> "$GITHUB_STEP_SUMMARY"
+        status=0
+        "$RUNNER_TEMP/firelight-bin/firelight" covers --base "origin/$BASE_REF" $flag "$DIR" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || status=$?
+        echo '~~~~~~~~~~' >> "$GITHUB_STEP_SUMMARY"
+        # 2 = covers couldn't tell (e.g. a shallow clone): a warning by default.
+        if [ "$status" = 2 ] && [ "$STRICT" != "true" ]; then
+          echo "::warning::firelight covers couldn't compare with the base; check out with fetch-depth: 0"
+          exit 0
+        fi
+        exit "$status"

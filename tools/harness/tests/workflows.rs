@@ -16,10 +16,17 @@ fn is_release_job(name: &str) -> bool {
 }
 
 /// Jobs without harden-runner: attest (first-party actions only) and pages
-/// (exactly one deploy step), as maintenance-manager §17.2; and the two macOS
-/// builds, where harden-runner's block mode doesn't enforce (§17.3).
-const NO_HARDEN: &[&str] = &["attest", "pages", "build-macos-arm64", "build-macos-amd64"];
-const MACOS: &[&str] = &["build-macos-arm64", "build-macos-amd64"];
+/// (exactly one deploy step), as maintenance-manager §17.2; and the macOS
+/// jobs (the two builds and the installer test, §11.1), where harden-runner's
+/// block mode doesn't enforce (§17.3).
+const NO_HARDEN: &[&str] = &[
+    "attest",
+    "pages",
+    "build-macos-arm64",
+    "build-macos-amd64",
+    "installer-macos",
+];
+const MACOS: &[&str] = &["build-macos-arm64", "build-macos-amd64", "installer-macos"];
 
 /// The only third-party actions allowed (§17.3); fixed for the run.
 const THIRD_PARTY: &[&str] = &["step-security/harden-runner", "zizmorcore/zizmor-action"];
@@ -94,6 +101,10 @@ fn every_uses_is_pinned_and_allowed() {
             continue;
         };
         n += 1;
+        // This repo's own action, tested on the code under review (§12.3).
+        if rest.trim() == "./action" {
+            continue;
+        }
         let (spec, comment) = rest.split_once(" # ").unwrap_or((rest, ""));
         let (action, sha) = spec
             .split_once('@')

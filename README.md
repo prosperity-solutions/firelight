@@ -26,6 +26,26 @@ agent. Content never lives in Firelight: git is the truth, Firelight is a lens.
 2. `veld start firelight` (the acme fixtures, word search only, ready in seconds).
 3. Open the URL it prints. `just test` runs the tests; `firelight preview .` shows any repo's `.firelight/` with live reload.
 
+## Install the CLI
+
+```sh
+curl -fsSL https://firelight.oss.life.li/install.sh | sh
+```
+
+Every archive's checksum is baked into the script, and `gh` users get the
+release's attestation checked too ([docs/install.md](docs/install.md)). Then
+`firelight check`, `firelight preview .` and `firelight skills` help you write
+a repo's `.firelight/`; the [GitHub Action](action/action.yml) keeps it true
+in CI.
+
+## Run it yourself
+
+One container (or binary) and one data folder; git is the truth, so there is
+nothing to back up. [docs/self-hosting.md](docs/self-hosting.md) covers a
+quick try with Docker, Compose with TLS, Helm and plain Kubernetes,
+connecting GitHub, auth proxies, models, operations and every startup
+message.
+
 ## Connect your agent
 
 Firelight is an MCP server at `/mcp` (streamable HTTP). In Claude Code:
@@ -56,8 +76,8 @@ Search ranks by words (SQLite FTS5) and by meaning (an embedding model), and
 fuses the two. The default model, `Qwen/Qwen3-Embedding-0.6B`, runs in-process
 on the CPU: no GPU and no API key. It is downloaded once (1.2 GB), checked
 against checksums compiled into the binary, and cached in the data folder.
-Measured on a laptop: about 0.2 s per query and per chunk indexed, and up to
-3.9 GiB of memory while the model loads. `FIRELIGHT_EMBEDDER=openai-compatible`
+Measured on a GitHub runner: a query takes about 0.3 s (p95 0.32 s), and the
+process peaks at about 3.5 GiB while the model loads (3.9 GiB on a laptop). `FIRELIGHT_EMBEDDER=openai-compatible`
 uses a server instead (Ollama, vLLM, OpenAI; chunk text then leaves the
 process), and `FIRELIGHT_EMBEDDER=off` keeps word search only, which is fully
 supported.

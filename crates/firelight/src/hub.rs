@@ -318,8 +318,21 @@ impl Hub {
             None
         };
         let started = Instant::now();
-        let result = self.puller.pull(spec, last_seen.as_deref()).await;
+        let result = {
+            use tracing::Instrument as _;
+            self.puller
+                .pull(spec, last_seen.as_deref())
+                .instrument(tracing::info_span!("pull", source = %id))
+                .await
+        };
         let ms = i64::try_from(started.elapsed().as_millis()).unwrap_or(i64::MAX);
+        let m = firelight_server::metrics::get();
+        let attrs = [opentelemetry::KeyValue::new("source", id.to_string())];
+        m.pull_duration
+            .record(started.elapsed().as_secs_f64(), &attrs);
+        if result.is_err() {
+            m.pull_errors.add(1, &attrs);
+        }
         let now = firelight_source::format_rfc3339(self.puller.clock.now_unix());
         // By default nothing about the newest commit changes.
         let mut state = SourceState {

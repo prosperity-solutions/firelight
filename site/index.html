@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self'; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'none'">
+<title>Firelight: the docs your repos write about themselves</title>
+<meta name="description" content="Firelight turns the .firelight/ folder in each of your repos into one searchable docs site, and an MCP server your coding agents can read.">
+<link rel="canonical" href="https://firelight.oss.life.li/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Firelight: the docs your repos write about themselves">
+<meta property="og:description" content="Firelight turns the .firelight/ folder in each of your repos into one searchable docs site, and an MCP server your coding agents can read.">
+<meta property="og:url" content="https://firelight.oss.life.li/">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+<h1>The docs your repos write about themselves.</h1>
+
+<p><strong>What.</strong> Firelight reads a small <code>.firelight/</code> folder in each of your repositories. It builds one docs site from them, and one search for people and agents.</p>
+<p><strong>Why.</strong> Docs that live apart from the code go stale. Here the docs sit in the same pull request as the change, so the team and its agents see the truth.</p>
+<p><strong>How.</strong> Your coding agent writes the folder. Firelight checks it, serves it, and tells you when an entry has gone stale. Everything is read-only and open source.</p>
+
+<p><img src="screenshot.png" width="600" height="415" alt="A Firelight page for the example company Acme: a top row of links, environment cards for production, staging and demo with their apps and tools, a consoles list, a PR previews form and an Unsorted card"></p>
+
+<h2>Install</h2>
+<pre id="cmd"><code>curl -fsSL https://firelight.oss.life.li/install.sh | sh</code></pre>
+
+<h2>Run it with Docker</h2>
+<pre id="docker"><code>docker run --rm -p 127.0.0.1:8080:8080 -v "$PWD:/repo:ro" -e FIRELIGHT_SOURCES='[{"id":"my-repo","kind":"dir","path":"/repo"}]' -e FIRELIGHT_SERVER_PUBLIC_URL=http://127.0.0.1:8080 -e FIRELIGHT_AUTH_UI=none -e FIRELIGHT_AUTH_MCP=none -e FIRELIGHT_EMBEDDER=off ghcr.io/prosperity-solutions/firelight:latest</code></pre>
+<p>Run it in a repo with a <code>.firelight/</code> folder, with <code>my-repo</code> replaced by the <code>id</code> in its <code>repo.yaml</code>. Drop <code>FIRELIGHT_EMBEDDER=off</code> for meaning search (the model downloads once).</p>
+
+<h2>Run it on Kubernetes</h2>
+<pre id="helm"><code>helm install firelight oci://ghcr.io/prosperity-solutions/charts/firelight --set publicUrl=https://firelight.acme.example --set config.auth.ui=none --set config.auth.mcp=none</code></pre>
+<p>Auth <code>none</code> suits a cluster behind a VPN or an auth proxy; the guide shows logins and tokens.</p>
+<p>See the <a href="https://github.com/prosperity-solutions/firelight/blob/main/docs/self-hosting.md">self-hosting guide</a> for the rest.</p>
+
+<h2>Add a repo</h2>
+<p>Paste this prompt into your coding agent, inside the repo you want to add.</p>
+<pre id="prompt">Set this repository up for Firelight, the docs your repos write about themselves.
+
+1. Install the Firelight skill: `npx skills add prosperity-solutions/firelight` (or `firelight skills install --project`), then read it: `firelight skills format` and `firelight skills writing`.
+2. Read this repository: what it is, what it is for, how it relates to the other repos it talks to, the links the team opens every day, and the questions people ask about it.
+3. If the Firelight MCP server is connected, call `list_spaces` and `list_repos` first. Contribute to the spaces that already exist before declaring a new one, and use the other repos' ids in refs and relations.
+4. Write `.firelight/`:
+   - `repo.yaml`: id, name, a one-sentence summary, the owner, its spaces, and honest `relations` ("when you do X here, also do Y there"), only the ones that really hold.
+   - `about.md`: the longer version of the summary.
+   - `links.yaml`: the links the team actually uses (environments, consoles, dashboards), placed on existing islands where they fit.
+   - 3 to 10 `concepts/`: what each important thing is, and what it is not.
+   - `guides/` for the tasks people ask about, step by step.
+   - `golden.yaml`: questions people would type, with the entries that must answer them.
+   Keep entries short, one idea each. Write only what you verified in this repository. Leave out anything secret or internal-only: no tokens, no internal hostnames you were not asked to publish, no personal data.
+5. Run `firelight check` and `firelight preview --check` until both pass.
+6. Add one rule to AGENTS.md: "Keep `.firelight/` true in the same PR as the change; run `firelight check` and `firelight preview --check`."
+7. Add the Firelight GitHub Action to CI (see `firelight skills ci`).
+8. Open a pull request with all of it.</pre>
+
+<h2>Connect your agent</h2>
+<p>Give your agent read access to the docs over MCP.</p>
+<pre><code>claude mcp add --transport http firelight https://firelight.acme.example/mcp --header "Authorization: Bearer &lt;token&gt;"</code></pre>
+
+<h2>Read more</h2>
+<ul>
+<li><a href="https://github.com/prosperity-solutions/firelight/blob/main/docs/self-hosting.md">Self-hosting</a></li>
+<li><a href="https://github.com/prosperity-solutions/firelight/blob/main/docs/install.md">Install</a></li>
+<li><a href="https://github.com/prosperity-solutions/firelight/blob/main/docs/format.md">The <code>.firelight/</code> format</a></li>
+</ul>
+</main>
+<footer>
+<p><a href="https://github.com/prosperity-solutions/firelight">GitHub</a> · <a href="https://github.com/prosperity-solutions/firelight/tree/main/docs">Docs</a> · <a href="https://firelight.oss.life.li/llms.txt">llms.txt</a> · <a href="https://github.com/prosperity-solutions/firelight/blob/main/LICENSE">MIT License</a> · <a href="https://liechtensteinlife.com/en-DE/markets/de/legal-notice-ps">Legal notice</a></p>
+<p>Privacy: This site sets no cookies and runs no analytics. It is hosted on <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub Pages</a>.</p>
+<p>Firelight · by Prosperity Solutions · built with Claude Code</p>
+</footer>
+<script src="site.js" defer></script>
+</body>
+</html>

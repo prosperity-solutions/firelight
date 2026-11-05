@@ -1,0 +1,27 @@
+# compose.yaml
+services:
+  firelight:
+    image: ghcr.io/prosperity-solutions/firelight:latest
+    restart: unless-stopped
+    environment:
+      FIRELIGHT_SERVER_PUBLIC_URL: https://firelight.acme.example
+      FIRELIGHT_SOURCES: '[{"id":"infra-repo","kind":"git","url":"https://git.acme.example/acme/infra-repo.git"}]'
+      FIRELIGHT_AUTH_UI: basic
+      FIRELIGHT_AUTH_USER: acme
+      FIRELIGHT_AUTH_PASSWORD_FILE: /run/secrets/firelight-password
+      FIRELIGHT_AUTH_MCP: token
+      FIRELIGHT_AUTH_MCP_TOKENS_FILE: /run/secrets/firelight-tokens
+    secrets: [firelight-password, firelight-tokens]
+    volumes: [firelight-data:/var/lib/firelight]
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    command: caddy reverse-proxy --from firelight.acme.example --to firelight:8080
+    volumes: [caddy-data:/data]
+secrets:
+  firelight-password: { file: ./firelight-password }
+  firelight-tokens: { file: ./firelight-tokens }
+volumes:
+  firelight-data: {}
+  caddy-data: {}
