@@ -7,7 +7,19 @@ all-features = true
 # RustSec advisories, unmaintained and unsound notices included, deny.
 version = 2
 yanked = "deny"
-ignore = []
+ignore = [
+    # zip 8.x, through candle-core 0.11.0 (.npz/.pth loading). All four are about
+    # ZipArchive::extract; Firelight loads only .safetensors and never opens a zip.
+    # candle-core 0.11.1 moves to zip 9 and passes the 7-day age rule on 2026-11-07:
+    # update then and drop these four.
+    { id = "RUSTSEC-2026-0367", reason = "zip extract only; never called (safetensors only); fixed by candle 0.11.1 after 2026-11-07" },
+    { id = "RUSTSEC-2026-0368", reason = "zip extract only; never called (safetensors only); fixed by candle 0.11.1 after 2026-11-07" },
+    { id = "RUSTSEC-2026-0369", reason = "zip extract only; never called (safetensors only); fixed by candle 0.11.1 after 2026-11-07" },
+    { id = "RUSTSEC-2026-0429", reason = "zip extract only; never called (safetensors only); fixed by candle 0.11.1 after 2026-11-07" },
+    # paste: a compile-time macro crate, finished rather than broken; used by
+    # candle and tokenizers. Nothing to patch; revisit when they drop it.
+    { id = "RUSTSEC-2024-0436", reason = "unmaintained compile-time macro, no known issue; via candle and tokenizers" },
+]
 
 [licenses]
 version = 2

@@ -10,7 +10,7 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use firelight_format::catalog::{self, Strictness};
 use firelight_format::{InputFile, Limits, Ref, parse_repo};
-use firelight_server::content::Fixed;
+use firelight_server::content::{Content, Fixed};
 use firelight_server::pages::{self, Ui};
 use firelight_server::{AppState, router};
 use tower::ServiceExt;
@@ -35,7 +35,7 @@ fn acme() -> Arc<Fixed> {
         ],
         Strictness::Lenient,
     );
-    Arc::new(Fixed(Arc::new(cat)))
+    Arc::new(Fixed::new(Arc::new(cat)))
 }
 
 fn ui() -> Ui {
@@ -145,7 +145,7 @@ fn hostile_repo_text_is_escaped_everywhere() {
     let (repo, _) = parse_repo(&files, None, &Limits::default());
     let repo = repo.unwrap_or_else(|| panic!("the hostile repo should still parse"));
     let cat = Arc::new(catalog::build(vec![repo], Strictness::Lenient));
-    let c = Fixed(cat);
+    let c = Fixed::new(cat);
     let ui = ui();
     let pages_html = [
         pages::space_page(&ui, &c, "default", &BTreeMap::new()).unwrap_or_default(),
@@ -310,7 +310,7 @@ fn search_stays_in_its_space() {
                 id: e.id.clone(),
             };
             for s in &spaces {
-                let hits = firelight_search::search(cat, s, &e.title, 100);
+                let hits = c.search(&e.title, &firelight_search::Filter::space(s), 100);
                 // The oracle is the catalog itself, not the helper search filters with.
                 let visible: Vec<&firelight_format::catalog::Space> = cat
                     .spaces
@@ -332,6 +332,8 @@ fn search_stays_in_its_space() {
                             })
                             .collect::<String>();
                         html.contains(&format!("data-ref=\"{}\"", h.r))
+                    } else if h.kind == firelight_search::Kind::Repo {
+                        visible.iter().any(|x| x.repos.contains(&h.r.repo))
                     } else {
                         visible.iter().any(|x| x.entries.contains(&h.r))
                     };
@@ -376,7 +378,7 @@ fn ids_are_unique_on_every_page() {
             .0
             .unwrap_or_else(|| panic!("clash repo")),
     );
-    let c = Fixed(Arc::new(catalog::build(repos, Strictness::Lenient)));
+    let c = Fixed::new(Arc::new(catalog::build(repos, Strictness::Lenient)));
     let ui = ui();
     let cat = c.0.clone();
     let mut pages_html: Vec<String> = cat

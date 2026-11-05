@@ -118,10 +118,21 @@ async fn search(
         .chars()
         .take(200)
         .collect::<String>();
-    if q.get("format").map(String::as_str) == Some("json") {
-        return axum::Json(pages::search_json(c, &space, &query)).into_response();
-    }
-    Html(pages::search_page(&state.ui, c, &space, &query)).into_response()
+    // Search may embed the query: off the async workers.
+    let Some(content) = state.content.clone() else {
+        return (StatusCode::SERVICE_UNAVAILABLE, "starting\n").into_response();
+    };
+    let json = q.get("format").map(String::as_str) == Some("json");
+    let ui = state.ui.clone();
+    let res = tokio::task::spawn_blocking(move || {
+        if json {
+            axum::Json(pages::search_json(content.as_ref(), &space, &query)).into_response()
+        } else {
+            Html(pages::search_page(&ui, content.as_ref(), &space, &query)).into_response()
+        }
+    })
+    .await;
+    res.unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())
 }
 
 async fn entry(
@@ -321,6 +332,53 @@ async fn status(State(state): State<AppState>) -> Response {
         ));
     }
     m.raw("</tbody></table>\n");
+    let stale = cat
+        .repos
+        .iter()
+        .flat_map(|r| r.entries.iter().map(move |e| (r, e)))
+        .filter(|(r, e)| !e.covers.is_empty() && c.staleness(&r.id, &e.path).is_some())
+        .count();
+    m.fmt(format_args!("<p>Maybe stale entries: {stale}</p>\n"));
+    let si = c.search_info();
+    m.raw("<h2>Search</h2>\n<table><tbody>\n");
+    let row = |m: &mut H, k: &str, v: &str| {
+        m.fmt(format_args!(
+            "<tr><th>{}</th><td>{}</td></tr>\n",
+            esc(k),
+            esc(v)
+        ));
+    };
+    row(&mut m, "Embedder", &si.backend);
+    if let Some(x) = &si.model {
+        row(&mut m, "Model", x);
+    }
+    if let Some(d) = si.dims {
+        row(&mut m, "Dimensions", &d.to_string());
+    }
+    row(
+        &mut m,
+        "Chunks embedded",
+        &format!("{} of {}", si.embedded, si.chunks),
+    );
+    if let Some(ms) = si.last_index_ms {
+        row(&mut m, "Last index", &format!("{ms} ms"));
+    }
+    row(&mut m, "Built-in golden check", &si.builtin);
+    if let Some(p) = &si.problem {
+        row(&mut m, "Problem", p);
+    }
+    m.raw("</tbody></table>\n");
+    if !si.golden_failures.is_empty() {
+        m.raw("<h3>Golden questions that don't pass</h3><ul>\n");
+        for (repo, line) in &si.golden_failures {
+            m.fmt(format_args!(
+                "<li><code>{}</code>: {}</li>\n",
+                esc(repo),
+                esc(line)
+            ));
+        }
+        m.raw("</ul>\n");
+    }
     if !cat.diagnostics.is_empty() {
         m.raw("<h2>Warnings</h2><ul>\n");
         for (repo, d) in &cat.diagnostics {

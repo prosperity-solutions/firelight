@@ -50,7 +50,8 @@ pub struct Hub {
     limits: Limits,
     self_docs: bool,
     served: RwLock<BTreeMap<String, Served>>,
-    catalog: RwLock<Arc<Catalog>>,
+    /// The index, which holds the catalog: the two swap together.
+    pub search: Arc<crate::search::Search>,
     /// Held across a whole rebuild: read served, build, swap.
     rebuild_lock: Mutex<()>,
     /// One pull per source at a time.
@@ -70,19 +71,21 @@ impl Hub {
         store: Store,
         limits: Limits,
         self_docs: bool,
+        embedder: &str,
     ) -> Arc<Hub> {
         let pull_locks = specs
             .iter()
             .map(|s| (s.id.clone(), Arc::new(tokio::sync::Mutex::new(()))))
             .collect();
+        let store = Arc::new(Mutex::new(store));
         Arc::new(Hub {
             specs,
             puller,
-            store: Arc::new(Mutex::new(store)),
+            search: Arc::new(crate::search::Search::new(store.clone(), embedder)),
+            store,
             limits,
             self_docs,
             served: RwLock::new(BTreeMap::new()),
-            catalog: RwLock::new(Arc::new(Catalog::default())),
             rebuild_lock: Mutex::new(()),
             pull_locks,
             judged: Mutex::new(BTreeSet::new()),
@@ -91,7 +94,7 @@ impl Hub {
     }
 
     pub fn catalog(&self) -> Arc<Catalog> {
-        self.catalog.read().map(|c| c.clone()).unwrap_or_default()
+        self.search.catalog()
     }
 
     pub fn generation(&self) -> u64 {
@@ -196,9 +199,7 @@ impl Hub {
             }
         }
         let cat = catalog::build(repos, Strictness::Lenient);
-        if let Ok(mut c) = self.catalog.write() {
-            *c = Arc::new(cat);
-        }
+        self.search.set_catalog(Arc::new(cat));
         self.generation
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     }
@@ -393,6 +394,17 @@ impl firelight_server::content::Content for Hub {
             committed_at: x.committed_at.clone(),
             web_url: None,
         })
+    }
+    fn search(
+        &self,
+        query: &str,
+        filter: &firelight_search::Filter,
+        limit: usize,
+    ) -> Vec<firelight_search::Hit> {
+        self.search.search(query, filter, limit)
+    }
+    fn search_info(&self) -> firelight_server::content::SearchInfo {
+        self.search.info()
     }
     fn staleness(
         &self,

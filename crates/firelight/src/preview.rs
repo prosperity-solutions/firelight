@@ -35,11 +35,7 @@ fn id_of(dir: &std::path::Path, limits: &Limits) -> String {
 
 pub fn run(args: Args) -> anyhow::Result<()> {
     check_listen(args.listen)?;
-    if let Some(e) = &args.embedder
-        && e != "off"
-    {
-        tracing::info!(embedder = %e, "meaning search arrives with M5; previewing with word search");
-    }
+    let embed = embed_config(args.embedder.as_deref())?;
     let limits = Limits::default();
     let dirs = if args.dirs.is_empty() {
         vec![PathBuf::from(".")]
@@ -69,7 +65,7 @@ pub fn run(args: Args) -> anyhow::Result<()> {
             clock: Arc::new(SystemClock),
         };
         let store = Store::memory().context("in-memory database")?;
-        let hub = Hub::new(specs.clone(), puller, store, limits, true);
+        let hub = Hub::new(specs.clone(), puller, store, limits, true, &embed.backend);
         hub.load_cache();
         for s in &specs {
             hub.pull(&s.id).await;
@@ -109,13 +105,38 @@ pub fn run(args: Args) -> anyhow::Result<()> {
         };
         let state = firelight_server::AppState::new().with_content(hub.clone(), ui, "#d9541e");
         state.set_ready(true);
-        firelight_server::serve(
+        // The page serves at once with word search; meaning search joins when
+        // the model is ready (the first run downloads it).
+        let (fail_tx, fail_rx) = tokio::sync::oneshot::channel::<String>();
+        let search = hub.search.clone();
+        tokio::spawn(async move {
+            if embed.backend != "off" {
+                eprintln!(
+                    "firelight preview: loading the {} embedder (`--embedder off` skips it)",
+                    embed.backend
+                );
+            }
+            match crate::search::load_embedder(&embed).await {
+                Ok(Some(e)) => {
+                    eprintln!("firelight preview: meaning search is on ({})", e.id());
+                    search.start_embedder(e).await;
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    let _ = fail_tx.send(e);
+                }
+            }
+        });
+        let server = firelight_server::serve(
             args.listen,
             state,
             |addr| eprintln!("firelight preview: http://{addr}/ (Ctrl-C to stop)"),
             firelight_server::shutdown_signal(),
-        )
-        .await?;
+        );
+        tokio::select! {
+            r = server => r?,
+            Ok(e) = fail_rx => anyhow::bail!("the embedder can't start: {e}. Try --embedder off"),
+        }
         Ok(())
     })
 }
@@ -167,6 +188,39 @@ fn check_listen(listen: std::net::SocketAddr) -> anyhow::Result<()> {
         );
     }
     Ok(())
+}
+
+/// The embedder for preview: `--embedder`, else `FIRELIGHT_EMBEDDER`, else
+/// `candle`; the other `FIRELIGHT_EMBED_*` variables apply as for `serve`.
+/// Models are kept in `$FIRELIGHT_DATA_DIR` or the user cache folder, so a
+/// preview downloads a model once.
+fn embed_config(flag: Option<&str>) -> anyhow::Result<crate::search::EmbedConfig> {
+    let env = |k: &str| std::env::var(k).ok().filter(|v| !v.is_empty());
+    let backend = flag
+        .map(str::to_string)
+        .or_else(|| env("FIRELIGHT_EMBEDDER"))
+        .unwrap_or_else(|| "candle".into());
+    if !["candle", "openai-compatible", "off"].contains(&backend.as_str()) {
+        anyhow::bail!("--embedder {backend:?}: use candle, openai-compatible or off");
+    }
+    let models_dir = env("FIRELIGHT_DATA_DIR")
+        .map(PathBuf::from)
+        .or_else(|| env("XDG_CACHE_HOME").map(|d| PathBuf::from(d).join("firelight")))
+        .or_else(|| env("HOME").map(|h| PathBuf::from(h).join(".cache/firelight")))
+        .unwrap_or_else(|| std::env::temp_dir().join("firelight"));
+    Ok(crate::search::EmbedConfig {
+        backend,
+        model: env("FIRELIGHT_EMBED_MODEL")
+            .unwrap_or_else(|| firelight_embed::model::DEFAULT_REPO.into()),
+        revision: env("FIRELIGHT_EMBED_REVISION"),
+        sha256: env("FIRELIGHT_EMBED_SHA256"),
+        hf_endpoint: env("FIRELIGHT_EMBED_HF_ENDPOINT")
+            .unwrap_or_else(|| "https://huggingface.co".into()),
+        path: env("FIRELIGHT_EMBED_PATH").map(PathBuf::from),
+        base_url: env("FIRELIGHT_EMBED_BASE_URL"),
+        api_key: env("FIRELIGHT_EMBED_API_KEY"),
+        models_dir,
+    })
 }
 
 #[cfg(test)]

@@ -50,11 +50,13 @@ persistence:
 
 # Sized for the default embedding model; M8 replaces these with measured numbers (D4)
 resources:
+  # D4: the default model (f32, CPU) peaks at ~3.9 GiB while it loads, then
+  # serves in less; queries take ~0.2 s each on one core.
   requests:
     cpu: "1"
     memory: 3Gi
   limits:
-    memory: 4Gi
+    memory: 5Gi
 
 service:
   type: ClusterIP

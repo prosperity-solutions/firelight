@@ -724,7 +724,7 @@ pub fn repo_page(ui: &Ui, content: &dyn Content, id: &str) -> Option<String> {
 /// The no-JS search results page.
 pub fn search_page(ui: &Ui, content: &dyn Content, space: &str, q: &str) -> String {
     let cat = content.catalog();
-    let hits = firelight_search::search(&cat, space, q, 25);
+    let hits = content.search(q, &firelight_search::Filter::space(space), 25);
     let mut m = H::new();
     m.fmt(format_args!(
         "<main class=\"search-page\">\n<h1>Results for “{}”</h1>\n",
@@ -783,7 +783,7 @@ pub fn hit_url(cat: &Catalog, hit: &firelight_search::Hit, space: &str) -> Strin
 /// The JSON for ⌘K (web/CONTRACT.md).
 pub fn search_json(content: &dyn Content, space: &str, q: &str) -> serde_json::Value {
     let cat = content.catalog();
-    let hits = firelight_search::search(&cat, space, q, 25);
+    let hits = content.search(q, &firelight_search::Filter::space(space), 25);
     let rows: Vec<serde_json::Value> = hits
         .iter()
         .map(|h| {

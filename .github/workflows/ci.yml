@@ -409,7 +409,8 @@ jobs:
           # read-only root filesystem.
           docker run -d --name fl --read-only -p 127.0.0.1:8080:8080 \
             -e FIRELIGHT_SERVER_PUBLIC_URL=http://localhost:8080 \
-            -e FIRELIGHT_AUTH_UI=none -e FIRELIGHT_AUTH_MCP=none firelight:ci
+            -e FIRELIGHT_AUTH_UI=none -e FIRELIGHT_AUTH_MCP=none \
+            -e FIRELIGHT_EMBEDDER=off firelight:ci
           ok=""
           for _ in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:8080/readyz; then ok=1; break; fi
@@ -514,9 +515,78 @@ jobs:
             target
           key: cargo-e2e-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
 
+  model:
+    # §13.4: the only test job that reaches Hugging Face. Downloads the default
+    # model once (cached by revision; the cache is saved on main so PRs reuse
+    # it), verifies it, checks the model card's reference vectors, embeds the
+    # self-docs, runs the built-in golden set, and records the timings.
+    name: model
+    needs: gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      contents: read # checkout
+    env:
+      FIRELIGHT_MODEL_TEST: "1"
+      FIRELIGHT_MODEL_CACHE: ${{ github.workspace }}/model-cache
+      # D4: p95 of one query embedding on a GitHub runner, with headroom.
+      FIRELIGHT_P95_BUDGET_MS: "1500"
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: block
+          # D3: huggingface.co redirects LFS/Xet files to its CDN hosts.
+          allowed-endpoints: >
+            static.rust-lang.org:443
+            index.crates.io:443
+            static.crates.io:443
+            huggingface.co:443
+            us.aws.cdn.hf.co:443
+            us.gcp.cdn.hf.co:443
+            cdn-lfs.hf.co:443
+            cdn-lfs-us-1.hf.co:443
+            cas-bridge.xethub.hf.co:443
+            cas-server.xethub.hf.co:443
+            transfer.xethub.hf.co:443
+            *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            target
+          key: cargo-model-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: cargo-model-
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: model-cache
+          # The pinned default revision (crates/firelight-embed/src/model.rs).
+          key: model-${{ hashFiles('crates/firelight-embed/src/model.rs') }}
+      - name: Reference vectors (model card)
+        run: cargo test --locked --release -p firelight-embed --test reference -- --ignored --nocapture
+      - name: Self-docs, built-in golden set, latency
+        run: cargo test --locked --release -p firelight model_job -- --ignored --nocapture
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: github.event_name == 'push'
+        with:
+          path: model-cache
+          key: model-${{ hashFiles('crates/firelight-embed/src/model.rs') }}
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: github.event_name == 'push'
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            target
+          key: cargo-model-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+
   all-green:
     name: all-green
-    needs: [gate, commits, ship, workflows, lint, deps, test, chart, image, e2e]
+    needs: [gate, commits, ship, workflows, lint, deps, test, chart, image, e2e, model]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 2
