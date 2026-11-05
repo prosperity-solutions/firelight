@@ -1,0 +1,7 @@
+---
+source: crates/firelight-server/tests/api.rs
+expression: "serde_json::to_string_pretty(&v).unwrap_or_default()"
+---
+{
+  "sources": []
+}

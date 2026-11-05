@@ -62,6 +62,9 @@ pub struct Hub {
     judged: Mutex<BTreeSet<String>>,
     /// Bumped on every catalog rebuild.
     generation: std::sync::atomic::AtomicU64,
+    /// Version, start time and the effective config (secrets as ••••), set
+    /// by the binary at startup, for the status (§16.1).
+    pub status_extra: RwLock<serde_json::Value>,
 }
 
 impl Hub {
@@ -90,11 +93,99 @@ impl Hub {
             pull_locks,
             judged: Mutex::new(BTreeSet::new()),
             generation: std::sync::atomic::AtomicU64::new(0),
+            status_extra: RwLock::new(serde_json::json!({})),
         })
     }
 
     pub fn catalog(&self) -> Arc<Catalog> {
         self.search.catalog()
+    }
+
+    /// The status (§16.1) as JSON. Source URLs never carry credentials.
+    pub fn status_json(&self) -> serde_json::Value {
+        use serde_json::json;
+        let cat = self.catalog();
+        let states = self.source_states();
+        let served = self.served.read().map(|s| s.clone()).unwrap_or_default();
+        let info = self.search.info();
+        let sources: Vec<serde_json::Value> = self
+            .specs
+            .iter()
+            .map(|spec| {
+                let st = states.iter().find(|x| x.source_id == spec.id);
+                let (kind, url, git_ref) = match &spec.origin {
+                    firelight_source::pull::Origin::Dir(p) => ("dir", p.display().to_string(), None),
+                    firelight_source::pull::Origin::Git { url, git_ref, .. } => {
+                        ("git", strip_credentials(url), git_ref.clone())
+                    }
+                };
+                let sv = served.get(&spec.id);
+                let counts = cat.repo(&spec.id).map(|r| {
+                    let concepts = r.entries.iter().filter(|e| e.kind == firelight_format::EntryKind::Concept).count();
+                    json!({ "concepts": concepts, "guides": r.entries.len() - concepts, "links": r.links.len(), "islands": r.islands.len() })
+                });
+                let errors: Option<serde_json::Value> = st
+                    .and_then(|x| x.newest_diagnostics.as_deref())
+                    .and_then(|d| serde_json::from_str(d).ok());
+                let warnings: Vec<serde_json::Value> = sv
+                    .map(|x| serde_json::from_str(&diagnostics_json(&x.diagnostics)).unwrap_or_default())
+                    .into_iter()
+                    .collect();
+                let health = match (sv, st.and_then(|x| x.last_pull_error.as_ref()), errors.as_ref().is_some_and(|e| e.as_array().is_some_and(|a| !a.is_empty()))) {
+                    (None, _, _) => "not served yet",
+                    (Some(_), Some(_), _) => "pull failing; serving the last good commit",
+                    (Some(_), None, true) => "newest commit fails its checks; serving the last good one",
+                    _ => "ok",
+                };
+                json!({
+                    "id": spec.id, "kind": kind, "url": url, "ref": git_ref,
+                    "commit": sv.map(|x| x.commit.clone()), "committed_at": sv.and_then(|x| x.committed_at.clone()),
+                    "newest_commit": st.and_then(|x| x.newest_commit.clone()),
+                    "last_pull_at": st.and_then(|x| x.last_pull_at.clone()),
+                    "last_pull_ms": st.and_then(|x| x.last_pull_ms),
+                    "last_pull_error": st.and_then(|x| x.last_pull_error.as_deref().map(scrub_urls)),
+                    "errors": errors, "warnings": warnings.into_iter().next().unwrap_or(json!([])),
+                    "counts": counts, "health": health,
+                })
+            })
+            .collect();
+        let (db_size, db_version) = self
+            .store
+            .lock()
+            .map(|s| (s.size_bytes(), s.schema_version().unwrap_or(0)))
+            .unwrap_or((0, 0));
+        let stale = cat
+            .repos
+            .iter()
+            .flat_map(|r| r.entries.iter().map(move |e| (r, e)))
+            .filter(|(r, e)| {
+                !e.covers.is_empty()
+                    && firelight_server::content::Content::staleness(self, &r.id, &e.path).is_some()
+            })
+            .count();
+        let mut v = json!({
+            "format_versions": firelight_format::FORMAT_VERSIONS,
+            "sources": sources,
+            "maybe_stale": stale,
+            "embedder": {
+                "backend": info.backend, "model": info.model, "dims": info.dims,
+                "chunks_embedded": info.embedded, "chunks": info.chunks,
+                "last_index_ms": info.last_index_ms, "problem": info.problem.as_deref().map(scrub_urls),
+            },
+            "golden": {
+                "builtin": info.builtin,
+                "failures": info.golden_failures.iter().map(|(r, l)| json!({ "repo": r, "question": l })).collect::<Vec<_>>(),
+            },
+            "database": { "size_bytes": db_size, "schema_version": db_version },
+        });
+        if let (Some(o), Ok(extra)) = (v.as_object_mut(), self.status_extra.read())
+            && let Some(e) = extra.as_object()
+        {
+            for (k, x) in e {
+                o.insert(k.clone(), x.clone());
+            }
+        }
+        v
     }
 
     pub fn generation(&self) -> u64 {
@@ -403,6 +494,9 @@ impl firelight_server::content::Content for Hub {
     ) -> Vec<firelight_search::Hit> {
         self.search.search(query, filter, limit)
     }
+    fn status(&self) -> serde_json::Value {
+        self.status_json()
+    }
     fn search_info(&self) -> firelight_server::content::SearchInfo {
         self.search.info()
     }
@@ -429,3 +523,57 @@ impl firelight_server::content::Content for Hub {
 
 #[cfg(test)]
 mod tests;
+
+/// A git URL without user or password (config refuses them; this is the
+/// second line of defence for the status output).
+fn strip_credentials(u: &str) -> String {
+    match url::Url::parse(u) {
+        Ok(mut x) => {
+            let _ = x.set_username("");
+            let _ = x.set_password(None);
+            x.set_query(None);
+            x.set_fragment(None);
+            x.to_string()
+        }
+        Err(_) => scrub_urls(u.split('@').next_back().unwrap_or(u)),
+    }
+}
+
+/// Every URL in `s` loses its query and fragment (a `?private_token=…` must
+/// never reach the status, §17.1).
+pub fn scrub_urls(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut rest = s;
+    while let Some(i) = rest.find("://") {
+        let (head, tail) = rest.split_at(i + 3);
+        out.push_str(head);
+        let end = tail
+            .find(|c: char| {
+                c.is_whitespace() || matches!(c, '"' | '\'' | ',' | ']' | '}' | ')' | '>')
+            })
+            .unwrap_or(tail.len());
+        let url = &tail[..end];
+        let cut = url.find(['?', '#']).unwrap_or(url.len());
+        out.push_str(&url[..cut]);
+        rest = &tail[end..];
+    }
+    out.push_str(rest);
+    out
+}
+
+#[cfg(test)]
+mod scrub_tests {
+    #[test]
+    fn urls_lose_queries() {
+        assert_eq!(
+            super::scrub_urls(
+                r#"[{"url":"https://git.acme.example/a.git?private_token=s3cret#x"}] and http://h/p?k=v."#
+            ),
+            r#"[{"url":"https://git.acme.example/a.git"}] and http://h/p"#
+        );
+        assert_eq!(
+            super::strip_credentials("https://u:p@git.acme.example/a?key=1"),
+            "https://git.acme.example/a"
+        );
+    }
+}

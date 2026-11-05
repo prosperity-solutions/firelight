@@ -25,6 +25,11 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "env-filter", "ansi", "std"] }
 url = "2"
 
+[dev-dependencies]
+rmcp = { version = "=3.8.0", default-features = false, features = ["client", "transport-streamable-http-client-reqwest", "reqwest-tls-no-provider"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+
 [[bin]]
 name = "firelight"
 path = "src/main.rs"

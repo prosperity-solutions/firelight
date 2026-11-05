@@ -103,7 +103,22 @@ pub fn run(args: Args) -> anyhow::Result<()> {
             mcp_token: false,
             live: true,
         };
-        let state = firelight_server::AppState::new().with_content(hub.clone(), ui, "#d9541e");
+        // Preview: auth off, so loopback names only (§10, §12.1).
+        let access = firelight_server::auth::Access {
+            check_host: true,
+            loopback: true,
+            origins: firelight_server::auth::origin(&format!("http://{}", args.listen))
+                .into_iter()
+                .chain(firelight_server::auth::origin(&format!(
+                    "http://localhost:{}",
+                    args.listen.port()
+                )))
+                .collect(),
+            ..Default::default()
+        };
+        let state = firelight_server::AppState::new()
+            .with_content(hub.clone(), ui, "#d9541e")
+            .with_access(access);
         state.set_ready(true);
         // The page serves at once with word search; meaning search joins when
         // the model is ready (the first run downloads it).

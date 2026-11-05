@@ -1,0 +1,28 @@
+---
+source: crates/firelight-server/tests/api.rs
+expression: "serde_json::to_string_pretty(&v).unwrap_or_default()"
+---
+{
+  "repos": [
+    {
+      "commit": null,
+      "health": "built in",
+      "id": "acme-infra",
+      "last_pull": null,
+      "name": "Infra",
+      "owner": "Platform team",
+      "permalink": "https://firelight.acme.example/r/acme-infra",
+      "summary": "Terraform and Helm for the clusters every Acme app runs on."
+    },
+    {
+      "commit": null,
+      "health": "built in",
+      "id": "acme-app",
+      "last_pull": null,
+      "name": "App",
+      "owner": "App team",
+      "permalink": "https://firelight.acme.example/r/acme-app",
+      "summary": "The Acme web app and its API, deployed to every environment."
+    }
+  ]
+}

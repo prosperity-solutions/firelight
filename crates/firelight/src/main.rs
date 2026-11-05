@@ -235,6 +235,68 @@ fn init_logging_with(level: &str, format: &str) {
     }
 }
 
+/// Who may ask what (§10), from the config.
+fn access(cfg: &Config) -> firelight_server::auth::Access {
+    use firelight_server::auth::{Access, host_name, is_loopback_name, origin};
+    let public = cfg
+        .public_url
+        .as_ref()
+        .map(|u| u.as_str().to_string())
+        .unwrap_or_default();
+    let public_host = cfg
+        .public_url
+        .as_ref()
+        .and_then(|u| u.host_str())
+        .and_then(host_name);
+    let mut hosts: Vec<String> = cfg
+        .allowed_hosts
+        .iter()
+        .filter_map(|h| host_name(h))
+        .collect();
+    hosts.extend(public_host.clone());
+    let mut origins: Vec<String> = cfg
+        .allowed_origins
+        .iter()
+        .filter_map(|o| origin(o))
+        .collect();
+    if origins.is_empty() {
+        origins.extend(origin(&public));
+    }
+    let a = Access {
+        basic: (cfg.ui_auth == config::UiAuth::Basic)
+            .then(|| cfg.basic.as_ref().map(|(u, p)| (u.clone(), p.0.clone())))
+            .flatten(),
+        tokens: None,
+        check_host: true,
+        hosts,
+        loopback: public_host.as_deref().is_some_and(is_loopback_name),
+        origins,
+    };
+    if cfg.mcp_auth == config::McpAuth::Token {
+        a.with_tokens(cfg.mcp_tokens.iter().map(|t| t.0.clone()).collect())
+    } else {
+        a
+    }
+}
+
+/// Version, start time and the effective config for the status (§16.1).
+/// Secrets are already `••••` in `shown`; URLs lose their queries.
+fn status_extra(cfg: &Config) -> serde_json::Value {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(0));
+    let config: Vec<serde_json::Value> = cfg
+        .shown
+        .iter()
+        .map(|(k, v, o)| serde_json::json!({ "key": k, "value": hub::scrub_urls(v), "from": o.to_string() }))
+        .collect();
+    serde_json::json!({
+        "version": VERSION, "commit": COMMIT,
+        "started_at": firelight_source::format_rfc3339(now),
+        "config": config,
+    })
+}
+
 /// The embedder settings from the config.
 fn embed_config(cfg: &Config) -> search::EmbedConfig {
     search::EmbedConfig {
@@ -275,7 +337,12 @@ fn serve(cfg: Config) -> anyhow::Result<()> {
             mcp_token: cfg.mcp_auth == config::McpAuth::Token,
             live: false,
         };
-        let mut state = firelight_server::AppState::new().with_content(started.hub.clone(), ui, &cfg.ui_accent);
+        if let Ok(mut x) = started.hub.status_extra.write() {
+            *x = status_extra(&cfg);
+        }
+        let mut state = firelight_server::AppState::new()
+            .with_content(started.hub.clone(), ui, &cfg.ui_accent)
+            .with_access(access(&cfg));
         if let Some(w) = started.webhook {
             state = state.with_webhook(w);
         }

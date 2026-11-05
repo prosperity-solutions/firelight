@@ -1,0 +1,42 @@
+---
+source: crates/firelight-server/tests/api.rs
+expression: "serde_json::to_string_pretty(&v).unwrap_or_default()"
+---
+{
+  "links": [
+    {
+      "commit": null,
+      "concept": null,
+      "label": "App",
+      "note": null,
+      "ref": "acme-app/app-staging",
+      "repo": "acme-app",
+      "space": "platform",
+      "url": "https://app.staging.acme.example",
+      "where": "Environments › Staging › apps"
+    },
+    {
+      "commit": null,
+      "concept": "acme-infra/argocd",
+      "label": "Argo CD",
+      "note": "argo.staging.acme.example",
+      "ref": "acme-infra/argo-staging",
+      "repo": "acme-infra",
+      "space": "platform",
+      "url": "https://argo.staging.acme.example",
+      "where": "Environments › Staging › tools"
+    },
+    {
+      "commit": null,
+      "concept": null,
+      "label": "Traces",
+      "note": null,
+      "ref": "acme-infra/traces-staging",
+      "repo": "acme-infra",
+      "space": "platform",
+      "url": "https://traces.staging.acme.example",
+      "where": "Environments › Staging › tools"
+    }
+  ],
+  "space": "platform"
+}

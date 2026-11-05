@@ -799,6 +799,34 @@ pub fn load(inputs: &Inputs, purpose: Purpose) -> Result<Config, Problems> {
             "none is refused with auth.ui = basic: MCP would expose everything the login protects. Set FIRELIGHT_AUTH_MCP=token and give it tokens.".into(),
         );
     }
+    if mcp_tokens.iter().any(|t| t.0.trim().is_empty()) {
+        prob(&mut problems, "auth.mcp_tokens", &origin_of("auth.mcp_tokens"), "a token in the list is empty (an unset variable?). Remove it: an empty token must never be accepted.".into());
+    }
+    for h in &allowed_hosts {
+        match firelight_server::auth::host_name(h) {
+            Some(n) if n != "0.0.0.0" && n != "::" && !n.contains('*') => {}
+            _ => prob(
+                &mut problems,
+                "server.allowed_hosts",
+                &origin_of("server.allowed_hosts"),
+                format!(
+                    "{h:?} is not a host name (like firelight.firelight.svc or firelight:8080; no wildcards, no 0.0.0.0)"
+                ),
+            ),
+        }
+    }
+    for o in &allowed_origins {
+        if firelight_server::auth::origin(o).is_none() || o.contains('*') {
+            prob(
+                &mut problems,
+                "server.allowed_origins",
+                &origin_of("server.allowed_origins"),
+                format!(
+                    "{o:?} is not an origin (like https://app.acme.example; no wildcards, no `null`)"
+                ),
+            );
+        }
+    }
     if mcp_auth == McpAuth::Token && mcp_tokens.iter().all(|t| t.0.trim().is_empty()) {
         prob(&mut problems, "auth.mcp_tokens", &origin_of("auth.mcp_tokens"), "required with auth.mcp = token: at least one token. Set FIRELIGHT_AUTH_MCP_TOKENS_FILE to a file with one token per line.".into());
     }

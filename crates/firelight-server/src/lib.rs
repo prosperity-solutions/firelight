@@ -4,9 +4,13 @@
 //! M1 holds the skeleton: the router, `/healthz` and `/readyz`, and graceful
 //! shutdown. Later milestones add the routes behind the same [`AppState`].
 
+mod api;
+pub mod auth;
 pub mod content;
+pub mod data;
 pub mod html;
 pub mod markdown;
+pub mod mcp;
 pub mod onboarding;
 pub mod pages;
 mod routes;
@@ -30,6 +34,7 @@ pub struct AppState {
     ready: Arc<AtomicBool>,
     webhook: Option<Arc<Webhook>>,
     content: Option<Arc<dyn content::Content>>,
+    access: Arc<auth::Access>,
     ui: Arc<pages::Ui>,
     accent: Arc<str>,
 }
@@ -70,6 +75,12 @@ impl AppState {
         self
     }
 
+    /// Who may ask what (§10).
+    pub fn with_access(mut self, a: auth::Access) -> Self {
+        self.access = Arc::new(a);
+        self
+    }
+
     /// With webhooks on (a secret is configured).
     pub fn with_webhook(mut self, w: Webhook) -> Self {
         self.webhook = Some(Arc::new(w));
@@ -89,17 +100,43 @@ impl AppState {
 
 /// The full router.
 pub fn router(state: AppState) -> Router {
-    Router::new()
+    use axum::middleware::from_fn_with_state;
+    // Always open: probes and the webhook (its HMAC is its auth).
+    let open = Router::new()
         .route("/healthz", get(healthz))
         .route("/readyz", get(readyz))
-        .merge(routes::pages())
         // GitHub sends push payloads up to 25 MB.
         .route(
             "/webhook/github",
             post(webhook).layer(axum::extract::DefaultBodyLimit::max(25 << 20)),
-        )
+        );
+    // Exactly `/mcp` (no nesting: `/mcp/` and `/mcp/x` don't exist), with
+    // its own Origin and bearer checks.
+    let mcp = Router::new()
+        .route("/mcp", mcp_service(&state))
+        .route_layer(from_fn_with_state(state.clone(), auth::mcp));
+    // The page and the API, behind basic auth when it is on.
+    let ui = Router::new()
+        .merge(routes::pages())
+        .merge(api::routes())
+        .route_layer(from_fn_with_state(state.clone(), auth::basic));
+    // The Host check covers everything but the open routes, unknown paths too.
+    let checked = mcp
+        .merge(ui)
+        .layer(from_fn_with_state(state.clone(), auth::host));
+    open.merge(checked)
         .with_state(state)
         .layer(axum::middleware::from_fn(routes::security_headers))
+}
+
+/// `/mcp`, exactly (no nesting, so `/mcp/x` or `//mcp` never reach it).
+fn mcp_service(state: &AppState) -> axum::routing::MethodRouter<AppState> {
+    match &state.content {
+        Some(c) => axum::routing::any_service(
+            mcp::Mcp::new(c.clone(), &state.ui.public_url, &state.ui.version).service(),
+        ),
+        None => axum::routing::any(|| async { (StatusCode::SERVICE_UNAVAILABLE, "starting\n") }),
+    }
 }
 
 /// Liveness: the process answers. Always open, no auth, no Host check (§10).

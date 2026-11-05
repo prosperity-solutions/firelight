@@ -1,0 +1,31 @@
+---
+source: crates/firelight-server/tests/api.rs
+expression: "serde_json::to_string_pretty(&v).unwrap_or_default()"
+---
+{
+  "links": [
+    {
+      "commit": null,
+      "concept": "acme-infra/argocd",
+      "label": "Argo CD",
+      "note": "argo.acme.example",
+      "ref": "acme-infra/argo-production",
+      "repo": "acme-infra",
+      "space": "platform",
+      "url": "https://argo.acme.example",
+      "where": "Environments › Production › tools"
+    },
+    {
+      "commit": null,
+      "concept": "acme-infra/argocd",
+      "label": "Argo CD",
+      "note": "argo.staging.acme.example",
+      "ref": "acme-infra/argo-staging",
+      "repo": "acme-infra",
+      "space": "platform",
+      "url": "https://argo.staging.acme.example",
+      "where": "Environments › Staging › tools"
+    }
+  ],
+  "space": "all"
+}

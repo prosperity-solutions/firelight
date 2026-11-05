@@ -1,0 +1,32 @@
+---
+source: crates/firelight-server/tests/api.rs
+expression: "serde_json::to_string_pretty(&v).unwrap_or_default()"
+---
+{
+  "hits": [
+    {
+      "commit": null,
+      "kind": "link",
+      "permalink": "https://firelight.acme.example/s/platform#acme-infra/argo-production",
+      "ref": "acme-infra/argo-production",
+      "repo": "acme-infra",
+      "score": 0.01639344262295082,
+      "summary": "argo.acme.example",
+      "title": "Argo CD",
+      "url": "https://argo.acme.example"
+    },
+    {
+      "commit": null,
+      "kind": "link",
+      "permalink": "https://firelight.acme.example/s/platform#acme-infra/argo-staging",
+      "ref": "acme-infra/argo-staging",
+      "repo": "acme-infra",
+      "score": 0.016129032258064516,
+      "summary": "argo.staging.acme.example",
+      "title": "Argo CD",
+      "url": "https://argo.staging.acme.example"
+    }
+  ],
+  "query": "argo",
+  "space": "platform"
+}

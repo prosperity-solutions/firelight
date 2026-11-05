@@ -1,0 +1,40 @@
+---
+source: crates/firelight-server/tests/api.rs
+expression: "serde_json::to_string_pretty(&v).unwrap_or_default()"
+---
+{
+  "aliases": [
+    "just-in-time access",
+    "elevate",
+    "admin rights"
+  ],
+  "commit": null,
+  "commit_date": null,
+  "covers": [
+    "terraform/access/**"
+  ],
+  "kind": "guide",
+  "links": [
+    {
+      "label": "Access",
+      "ref": "acme-infra/access-portal",
+      "url": "https://access.acme.example"
+    }
+  ],
+  "markdown": "1. Open [the access portal](link:access-portal).\n2. Pick the role and give a reason.\n3. The rights end on their own after four hours.\n\n## What it does not do\n\nIt never grants rights to other people. See\n[the access model](entry:access-model#what-it-is-not).\n",
+  "path": ".firelight/guides/request-access.md",
+  "permalink": "https://firelight.acme.example/e/acme-infra/request-access",
+  "ref": "acme-infra/request-access",
+  "related": [
+    "acme-infra/access-model",
+    "acme-app/onboarding"
+  ],
+  "repo": "acme-infra",
+  "stale": false,
+  "summary": "Get time-limited admin rights for a cloud account, with a reason.",
+  "tags": [
+    "access",
+    "cloud"
+  ],
+  "title": "Request access rights"
+}

@@ -1,0 +1,35 @@
+---
+source: crates/firelight-server/tests/api.rs
+expression: "serde_json::to_string_pretty(&v).unwrap_or_default()"
+---
+{
+  "entries": [
+    {
+      "commit": null,
+      "kind": "concept",
+      "permalink": "https://firelight.acme.example/e/acme-infra/access-model",
+      "ref": "acme-infra/access-model",
+      "repo": "acme-infra",
+      "summary": "Who may do what in Acme's cloud accounts, and how admin rights are granted for a limited time.",
+      "tags": [
+        "access",
+        "cloud"
+      ],
+      "title": "Access model"
+    },
+    {
+      "commit": null,
+      "kind": "guide",
+      "permalink": "https://firelight.acme.example/e/acme-infra/request-access",
+      "ref": "acme-infra/request-access",
+      "repo": "acme-infra",
+      "summary": "Get time-limited admin rights for a cloud account, with a reason.",
+      "tags": [
+        "access",
+        "cloud"
+      ],
+      "title": "Request access rights"
+    }
+  ],
+  "space": "all"
+}
