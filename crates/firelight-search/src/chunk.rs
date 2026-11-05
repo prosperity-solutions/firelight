@@ -96,17 +96,6 @@ fn first_section(md: &str) -> &str {
     md
 }
 
-/// ATX heading level of a line (`## x` → 2), outside code fences.
-fn heading_level(line: &str) -> Option<usize> {
-    let t = line.trim_start_matches(' ');
-    if line.len() - t.len() > 3 {
-        return None;
-    }
-    let n = t.chars().take_while(|c| *c == '#').count();
-    ((1..=6).contains(&n) && t[n..].chars().next().is_none_or(|c| c == ' ' || c == '\t'))
-        .then_some(n)
-}
-
 fn entry_chunks(
     repo: &str,
     e: &firelight_format::Entry,
@@ -123,30 +112,24 @@ fn entry_chunks(
         EntryKind::Guide => Kind::Guide,
     };
     let aliases = e.aliases.join(", ");
-    // Sections: (heading index into body.headings, text).
-    let mut sections: Vec<(Option<usize>, String)> = vec![(None, String::new())];
-    let mut seen = 0usize;
-    let mut fence: Option<String> = None;
-    for line in e.body.source.lines() {
-        let t = line.trim_start();
-        if let Some(f) = &fence {
-            if t.starts_with(f.as_str()) {
-                fence = None;
-            }
-        } else if t.starts_with("```") || t.starts_with("~~~") {
-            fence = Some(t[..3].to_string());
-        } else if let Some(level) = heading_level(line) {
-            let idx = seen;
-            seen += 1;
-            if level == 2 || level == 3 {
-                sections.push((Some(idx), String::new()));
-                continue;
-            }
-        }
-        if let Some(last) = sections.last_mut() {
-            last.1.push_str(line);
-            last.1.push('\n');
-        }
+    // Sections split where the markdown parser saw `##`/`###` headings
+    // (so setext, blockquote and fenced cases agree with the anchors).
+    let src = &e.body.source;
+    let cuts: Vec<(usize, &firelight_format::Heading)> = e
+        .body
+        .headings
+        .iter()
+        .enumerate()
+        .filter(|(_, h)| (h.level == 2 || h.level == 3) && h.span.1 <= src.len())
+        .collect();
+    let text_of = |a: usize, b: usize| src.get(a..b).unwrap_or("").to_string();
+    let mut sections: Vec<(Option<usize>, String)> = vec![(
+        None,
+        text_of(0, cuts.first().map_or(src.len(), |(_, h)| h.span.0)),
+    )];
+    for (k, (i, h)) in cuts.iter().enumerate() {
+        let end = cuts.get(k + 1).map_or(src.len(), |(_, n)| n.span.0);
+        sections.push((Some(*i), text_of(h.span.1, end.max(h.span.1))));
     }
     for (i, (h, text)) in sections.into_iter().enumerate() {
         let heading = h
@@ -280,7 +263,7 @@ fn push_split(out: &mut Vec<Chunk>, c: Chunk, max: usize, count: &dyn Fn(&str) -
         });
         return;
     }
-    // The head (path line, aliases, summary) rides on every piece.
+    // The head (the `Title › Section (aliases)` line) rides on every piece.
     let (head, rest) = c.text.split_once('\n').unwrap_or((&c.text, ""));
     let budget = max.saturating_sub(count(head)).max(max / 2);
     for piece in pieces(rest, budget, count) {
@@ -393,13 +376,6 @@ mod tests {
         }
         let joined: String = pieces(&text, 8, &words).join(" ");
         assert_eq!(words(&joined), words(&text), "nothing lost");
-    }
-
-    #[test]
-    fn headings_outside_fences_only() {
-        assert_eq!(heading_level("## A"), Some(2));
-        assert_eq!(heading_level("#tag"), None);
-        assert_eq!(heading_level("    ## code"), None);
     }
 
     #[test]

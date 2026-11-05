@@ -113,7 +113,7 @@ pub fn scan(body: &str, home: &str, path: &str, first_line: u32) -> (Markdown, V
     };
     let mut diags = Vec::new();
     let mut slugger = Slugger::default();
-    let mut heading: Option<(u8, String)> = None;
+    let mut heading: Option<(u8, String, usize)> = None;
     let loc = |off: usize| {
         let (l, c) = lines.at(body, off);
         Loc {
@@ -125,20 +125,21 @@ pub fn scan(body: &str, home: &str, path: &str, first_line: u32) -> (Markdown, V
     for (ev, range) in Parser::new_ext(body, options()).into_offset_iter() {
         match ev {
             Event::Start(Tag::Heading { level, .. }) => {
-                heading = Some((level as u8, String::new()))
+                heading = Some((level as u8, String::new(), range.start))
             }
             Event::End(TagEnd::Heading(_)) => {
-                if let Some((level, text)) = heading.take() {
+                if let Some((level, text, start)) = heading.take() {
                     let slug = slugger.next(&text);
                     md.headings.push(Heading {
                         level,
                         text: text.trim().to_string(),
                         slug,
+                        span: (start, range.end),
                     });
                 }
             }
             Event::Text(t) | Event::Code(t) => {
-                if let Some((_, h)) = heading.as_mut() {
+                if let Some((_, h, _)) = heading.as_mut() {
                     h.push_str(&t);
                 }
             }

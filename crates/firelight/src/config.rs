@@ -867,6 +867,35 @@ pub fn load(inputs: &Inputs, purpose: Purpose) -> Result<Config, Problems> {
             }
         }
     }
+    // The mirror rule (D3), checked here so it exits 2 with everything else.
+    if embedder == "candle"
+        && embed_path.is_none()
+        && firelight_embed::model::valid_repo(&embed_model)
+        && (embed_revision.is_some() || embed_model == DEFAULT_MODEL)
+        && let Some(ep) = &embed_hf_endpoint
+    {
+        let probe = crate::search::EmbedConfig {
+            backend: embedder.clone(),
+            model: embed_model.clone(),
+            revision: embed_revision.clone(),
+            sha256: embed_sha256.clone(),
+            hf_endpoint: ep.as_str().trim_end_matches('/').to_string(),
+            path: None,
+            base_url: None,
+            api_key: None,
+            models_dir: PathBuf::new(),
+        };
+        if let Err(e) = probe.spec()
+            && !e.starts_with("embed.sha256")
+        {
+            prob(
+                &mut problems,
+                "embed.hf_endpoint",
+                &origin_of("embed.hf_endpoint"),
+                e,
+            );
+        }
+    }
     if embedder == "openai-compatible"
         && let Some(u) = &embed_base_url
         && let Err(e) = firelight_embed::openai::check_base(u.as_str(), embed_api_key.is_some())

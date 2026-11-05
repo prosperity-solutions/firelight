@@ -277,3 +277,93 @@ fn vectors_follow_their_embedder() {
     assert_eq!(words.coverage().0, 0, "a words-only index takes no vectors");
     assert!(words.missing().is_empty());
 }
+
+fn tiny_repo(guide: &str) -> Arc<Catalog> {
+    let files = vec![
+        firelight_format::InputFile::regular(
+            "repo.yaml",
+            b"format: 1\nid: tiny\nname: Tiny\nsummary: A test repo.\n".to_vec(),
+        ),
+        firelight_format::InputFile::regular("guides/g.md", guide.as_bytes().to_vec()),
+    ];
+    let repo = parse_repo(&files, None, &Limits::default())
+        .0
+        .unwrap_or_else(|| panic!("tiny repo"));
+    Arc::new(catalog::build(vec![repo], Strictness::Lenient))
+}
+
+/// Sections follow the parser's headings: setext, blockquote and a fence
+/// that holds a `## ` line all agree with the anchors.
+#[test]
+fn sections_follow_the_parsers_headings() {
+    let g = "---\nformat: 1\ntitle: G\nsummary: S.\n---\nIntro.\n\nSetup\n-----\n\nText A\n\n> ## Quoted\n\nText B\n\n````\n```\n## not a heading\n```\n````\n\n### Last\n\nText C\n";
+    let idx = Index::words_only(tiny_repo(g)).unwrap_or_else(|e| panic!("{e}"));
+    let got: Vec<(Option<String>, String)> = idx
+        .chunks
+        .iter()
+        .filter(|c| c.kind == Kind::Guide)
+        .map(|c| {
+            (
+                c.heading.as_ref().map(|h| h.1.clone()),
+                c.body.trim().to_string(),
+            )
+        })
+        .collect();
+    let slugs: Vec<Option<&str>> = got.iter().map(|(s, _)| s.as_deref()).collect();
+    assert_eq!(
+        slugs,
+        [None, Some("setup"), Some("quoted"), Some("last")],
+        "{got:#?}"
+    );
+    assert!(
+        got[1].1.contains("Text A") && !got[1].1.contains("Text B"),
+        "{got:#?}"
+    );
+    assert!(
+        got[2].1.contains("not a heading"),
+        "a fenced line is text: {got:#?}"
+    );
+    assert!(got[3].1.contains("Text C"), "{got:#?}");
+}
+
+/// More than 500 matching chunks in other spaces don't hide the one in the
+/// space searched (filters apply before the cut).
+#[test]
+fn filters_apply_before_the_cut() {
+    let mut files = vec![
+        firelight_format::InputFile::regular(
+            "repo.yaml",
+            b"format: 1\nid: big\nname: Big\nsummary: Many guides.\nspaces: [noise]\n".to_vec(),
+        ),
+        firelight_format::InputFile::regular(
+            "spaces.yaml",
+            b"format: 1\nspaces:\n  - { id: noise, title: Noise }\n  - { id: mine, title: Mine }\n".to_vec(),
+        ),
+        firelight_format::InputFile::regular(
+            "guides/target.md",
+            b"---\nformat: 1\ntitle: Target\nsummary: How the widget works.\nspaces: [mine]\n---\nThe widget.\n".to_vec(),
+        ),
+    ];
+    for i in 0..700 {
+        files.push(firelight_format::InputFile::regular(
+            format!("guides/n{i}.md"),
+            format!("---\nformat: 1\ntitle: Widget {i}\nsummary: Widget widget widget.\n---\nWidget widget.\n").into_bytes(),
+        ));
+    }
+    let limits = Limits {
+        max_files: 2000,
+        ..Limits::default()
+    };
+    let repo = parse_repo(&files, None, &limits)
+        .0
+        .unwrap_or_else(|| panic!("big"));
+    let cat = Arc::new(catalog::build(vec![repo], Strictness::Lenient));
+    let idx = Index::words_only(cat).unwrap_or_else(|e| panic!("{e}"));
+    assert!(idx.chunks.len() > 500);
+    let hits = idx.search("widget", &Filter::space("mine"), 5, None);
+    assert_eq!(
+        hits.first().map(|h| h.r.clone()),
+        Some(r("big", "target")),
+        "{hits:#?}"
+    );
+}

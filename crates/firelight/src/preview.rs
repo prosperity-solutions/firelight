@@ -119,7 +119,7 @@ pub fn run(args: Args) -> anyhow::Result<()> {
             match crate::search::load_embedder(&embed).await {
                 Ok(Some(e)) => {
                     eprintln!("firelight preview: meaning search is on ({})", e.id());
-                    search.start_embedder(e);
+                    search.start_embedder(e).await;
                 }
                 Ok(None) => {}
                 Err(e) => {

@@ -429,6 +429,36 @@ impl Store {
             .map_err(|e| self.sql(e))
     }
 
+    /// Drop one embedder's vectors that no hash in `keep` uses.
+    pub fn retain_vectors(&mut self, model: &str, dims: usize, keep: &[[u8; 32]]) -> Result<usize> {
+        let path = self.shown();
+        let e = |source| StoreError::Sqlite {
+            path: path.clone(),
+            source,
+        };
+        let d = i64::try_from(dims).unwrap_or(i64::MAX);
+        let tx = self.conn.transaction().map_err(e)?;
+        tx.execute_batch("CREATE TEMP TABLE IF NOT EXISTS keep_hashes (hash BLOB PRIMARY KEY); DELETE FROM keep_hashes;")
+            .map_err(e)?;
+        {
+            let mut st = tx
+                .prepare_cached("INSERT OR IGNORE INTO keep_hashes (hash) VALUES (?1)")
+                .map_err(e)?;
+            for h in keep {
+                st.execute(params![&h[..]]).map_err(e)?;
+            }
+        }
+        let n = tx
+            .execute(
+                "DELETE FROM embeddings WHERE model = ?1 AND dims = ?2 AND hash NOT IN (SELECT hash FROM keep_hashes)",
+                params![model, d],
+            )
+            .map_err(e)?;
+        tx.execute_batch("DELETE FROM keep_hashes;").map_err(e)?;
+        tx.commit().map_err(e)?;
+        Ok(n)
+    }
+
     /// How many vectors the cache holds for one embedder.
     pub fn vector_count(&self, model: &str, dims: usize) -> Result<usize> {
         let d = i64::try_from(dims).unwrap_or(i64::MAX);

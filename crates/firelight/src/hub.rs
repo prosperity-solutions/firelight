@@ -199,7 +199,7 @@ impl Hub {
             }
         }
         let cat = catalog::build(repos, Strictness::Lenient);
-        self.search.reindex(Arc::new(cat));
+        self.search.set_catalog(Arc::new(cat));
         self.generation
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     }

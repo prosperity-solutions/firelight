@@ -198,6 +198,14 @@ pub fn expectations_from_listing(
     Ok(out)
 }
 
+/// [`verify_file`] on a blocking thread.
+async fn verify_async(path: &Path, exp: &Expect) -> Result<bool> {
+    let (p, e) = (path.to_path_buf(), exp.clone());
+    tokio::task::spawn_blocking(move || verify_file(&p, &e))
+        .await
+        .map_err(|e| err(e.to_string()))?
+}
+
 /// Does `path` match `exp`? Reads the whole file.
 pub fn verify_file(path: &Path, exp: &Expect) -> Result<bool> {
     use std::io::Read as _;
@@ -292,7 +300,7 @@ pub async fn ensure(spec: &Spec, data: &Path, client: &reqwest::Client) -> Resul
     for f in FILES {
         let exp = &want[*f];
         let path = dir.join(f);
-        if path.is_file() && verify_file(&path, exp)? {
+        if path.is_file() && verify_async(&path, exp).await? {
             continue;
         }
         let mut tries = 0;
@@ -378,7 +386,7 @@ async fn download(
         }
         out.sync_all()
             .map_err(|e| err(format!("cannot write {}: {e}", tmp.display())))?;
-        if !verify_file(&tmp, exp)? {
+        if !verify_async(&tmp, exp).await? {
             return Err(err(format!(
                 "{file} from {url} doesn't match its checksum; refusing to use it"
             )));

@@ -224,4 +224,6 @@ fn vectors_round_trip_and_prune() {
     assert_eq!(s.prune_other_models("m1", 2).unwrap_or(0), 1);
     assert_eq!(s.vector_count("m1", 2).unwrap_or(0), 2);
     assert_eq!(s.vector_count("m2", 3).unwrap_or(9), 0);
+    assert_eq!(s.retain_vectors("m1", 2, &[b]).unwrap_or(0), 1);
+    assert_eq!(s.vectors("m1", 2, &[a, b]).unwrap_or_default().len(), 1);
 }

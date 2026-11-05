@@ -307,6 +307,7 @@ fn serve(cfg: Config) -> anyhow::Result<()> {
         let (fail_tx, fail_rx) = tokio::sync::oneshot::channel::<String>();
         let embed = embed_config(&cfg);
         let (self_docs, golden_file, limits) = (cfg.self_docs, cfg.golden_file.clone(), sources::limits(&cfg));
+        let sources_wait = sources_ready.clone();
         tokio::spawn(async move {
             let mut wait = Duration::from_secs(5);
             let emb = loop {
@@ -328,7 +329,13 @@ fn serve(cfg: Config) -> anyhow::Result<()> {
             };
             if let Some(e) = emb {
                 tracing::info!(embedder = %e.id(), dims = e.dims(), "embedder ready");
-                search.start_embedder(e);
+                search.start_embedder(e).await;
+            }
+            // A golden file names served repos: wait until they are loaded.
+            if !self_docs && golden_file.is_some() {
+                while !sources_wait.load(Ordering::SeqCst) {
+                    tokio::time::sleep(Duration::from_millis(500)).await;
+                }
             }
             let docs = self_docs.then(hub::self_docs_files);
             let state = search.run_builtin(docs, golden_file, limits).await;

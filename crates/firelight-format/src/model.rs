@@ -253,6 +253,9 @@ pub struct Heading {
     pub text: String,
     /// Stable anchor; duplicates get `-2`, `-3`.
     pub slug: String,
+    /// Byte range of the heading in [`Markdown::source`], as the parser saw
+    /// it (setext and blockquote headings included).
+    pub span: (usize, usize),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

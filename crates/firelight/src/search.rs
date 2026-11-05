@@ -13,7 +13,7 @@
 //!   self-docs only (never user content) and gates readiness; repo golden
 //!   questions run after each full index and only warn.
 
-use std::collections::{BTreeSet, HashMap, VecDeque};
+use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
@@ -131,9 +131,13 @@ pub async fn load_embedder(cfg: &EmbedConfig) -> Result<Option<Shared>, String> 
             Ok(Some(Arc::new(e)))
         }
         "candle" => {
-            let (dir, id) = if let Some(p) = &cfg.path {
+            let (dir, id) = if let Some(p) = cfg.path.clone() {
                 let spec = cfg.spec().ok();
-                let dir = model::local(spec.as_ref(), p).map_err(|e| e.to_string())?;
+                // Hashing a local model reads every byte: off the workers.
+                let dir = tokio::task::spawn_blocking(move || model::local(spec.as_ref(), &p))
+                    .await
+                    .map_err(|e| e.to_string())?
+                    .map_err(|e| e.to_string())?;
                 (dir, format!("{}@local", cfg.model))
             } else {
                 let spec = cfg.spec()?;
@@ -153,6 +157,12 @@ pub async fn load_embedder(cfg: &EmbedConfig) -> Result<Option<Shared>, String> 
         }
         other => Err(format!("unknown embedder {other:?}")),
     }
+}
+
+/// Why a golden run didn't finish: worth retrying (the embedder) or not.
+pub enum Retry {
+    Yes(String),
+    No(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -187,10 +197,18 @@ struct Status {
 pub struct Search {
     embedder: RwLock<Option<Shared>>,
     index: RwLock<Arc<Index>>,
+    /// The newest catalog. `reindex` always builds from this, under
+    /// `reindex_lock`, with the embedder as it is then: an older build can
+    /// never be swapped in over a newer catalog or a newer embedder.
+    latest: RwLock<Arc<Catalog>>,
+    reindex_lock: Mutex<()>,
     store: Arc<Mutex<Store>>,
     wake: tokio::sync::watch::Sender<u64>,
     qcache: Mutex<VecDeque<(String, Vec<f32>)>>,
-    inflight: AtomicUsize,
+    inflight: Arc<AtomicUsize>,
+    /// Chunks the embedder refused one by one (bad input, content filter):
+    /// left to word search instead of retried forever.
+    refused: Mutex<HashSet<[u8; 32]>>,
     status: RwLock<Status>,
     /// The built-in golden check passed (or was skipped).
     pub golden_ok: AtomicBool,
@@ -199,23 +217,49 @@ pub struct Search {
 
 const QUERY_CACHE: usize = 64;
 const QUERY_SLOTS: usize = 2;
+/// A query waits this long for its vector, then searches with words.
+const QUERY_WAIT: Duration = Duration::from_secs(2);
 const BATCH: usize = 8;
+
+/// Run blocking work from either side: on a multi-thread runtime's worker it
+/// tells tokio to move other tasks away; elsewhere it just runs.
+pub fn blocking<T>(f: impl FnOnce() -> T) -> T {
+    match tokio::runtime::Handle::try_current() {
+        Ok(h) if h.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread => {
+            tokio::task::block_in_place(f)
+        }
+        _ => f(),
+    }
+}
+
+/// Gives a query slot back when dropped, even after a panic.
+struct Slot(Arc<AtomicUsize>);
+
+impl Drop for Slot {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
+}
 
 impl Search {
     pub fn new(store: Arc<Mutex<Store>>, backend: &str) -> Search {
         let (wake, _) = tokio::sync::watch::channel(0);
+        let empty = Arc::new(Catalog::default());
         Search {
             embedder: RwLock::new(None),
-            index: RwLock::new(Arc::new(
-                Index::words_only(Arc::new(Catalog::default())).unwrap_or_else(|e| {
+            index: RwLock::new(Arc::new(Index::words_only(empty.clone()).unwrap_or_else(
+                |e| {
                     tracing::error!(error = %e, "cannot build an empty word index");
                     std::process::exit(1)
-                }),
-            )),
+                },
+            ))),
+            latest: RwLock::new(empty),
+            reindex_lock: Mutex::new(()),
             store,
             wake,
             qcache: Mutex::new(VecDeque::new()),
-            inflight: AtomicUsize::new(0),
+            inflight: Arc::new(AtomicUsize::new(0)),
+            refused: Mutex::new(HashSet::new()),
             status: RwLock::new(Status {
                 backend: backend.to_string(),
                 model: None,
@@ -251,17 +295,37 @@ impl Search {
         }
     }
 
-    /// Build the index for `cat` (with cached vectors) and swap it in.
-    pub fn reindex(&self, cat: Arc<Catalog>) {
+    /// A new catalog: index it and swap both in. Blocking (chunking and the
+    /// word index); async callers are moved off the worker by [`blocking`].
+    pub fn set_catalog(self: &Arc<Self>, cat: Arc<Catalog>) {
+        if let Ok(mut l) = self.latest.write() {
+            *l = cat;
+        }
+        blocking(|| self.reindex());
+        // Without an embedder no embed loop runs: repo golden questions run
+        // here, after each re-index (§9.4).
+        if self.embedder().is_none()
+            && let Ok(h) = tokio::runtime::Handle::try_current()
+        {
+            let me = self.clone();
+            h.spawn(async move { me.run_repo_golden().await });
+        }
+    }
+
+    /// Build the index for the newest catalog and the current embedder (with
+    /// cached vectors) and swap it in.
+    fn reindex(&self) {
+        let _one_at_a_time = self.reindex_lock.lock();
+        let cat = self.latest.read().map(|c| c.clone()).unwrap_or_default();
         let emb = self.embedder();
         let built = match &emb {
             Some(e) => {
                 let e2 = e.clone();
-                Index::build(cat.clone(), Some(e.id()), e.max_tokens(), &move |t| {
+                Index::build(cat, Some(e.id()), e.max_tokens(), &move |t| {
                     e2.count_tokens(t)
                 })
             }
-            None => Index::words_only(cat.clone()),
+            None => Index::words_only(cat),
         };
         let idx = match built {
             Ok(i) => i,
@@ -270,13 +334,11 @@ impl Search {
                 return;
             }
         };
-        if let Some(e) = &emb {
-            let hashes = idx.hashes();
-            if let Ok(store) = self.store.lock()
-                && let Ok(v) = store.vectors(&e.id(), e.dims(), &hashes)
-            {
-                idx.set_vectors(&v);
-            }
+        if let Some(e) = &emb
+            && let Ok(store) = self.store.lock()
+            && let Ok(v) = store.vectors(&e.id(), e.dims(), &idx.hashes())
+        {
+            idx.set_vectors(&v);
         }
         if let Ok(mut i) = self.index.write() {
             *i = Arc::new(idx);
@@ -292,7 +354,8 @@ impl Search {
         idx.search(q, f, limit, v.as_deref())
     }
 
-    /// The query's vector, if meaning search can help now.
+    /// The query's vector, if meaning search can help now. Never waits more
+    /// than [`QUERY_WAIT`], and never more than [`QUERY_SLOTS`] at a time.
     fn query_vec(&self, idx: &Index, q: &str) -> Option<Vec<f32>> {
         let e = self.embedder()?;
         if idx.embedder.as_deref() != Some(e.id().as_str()) || idx.coverage().0 == 0 {
@@ -309,25 +372,36 @@ impl Search {
             self.inflight.fetch_sub(1, Ordering::SeqCst);
             return None;
         }
-        let v = e.embed_query(q);
-        self.inflight.fetch_sub(1, Ordering::SeqCst);
-        match v {
-            Ok(v) => {
+        let slot = Slot(self.inflight.clone());
+        let (tx, rx) = std::sync::mpsc::channel();
+        let q2 = q.to_string();
+        // The slot stays taken until the embedding really ends, so a hung
+        // backend can hold at most QUERY_SLOTS threads.
+        std::thread::spawn(move || {
+            let _slot = slot;
+            let _ = tx.send(e.embed_query(&q2));
+        });
+        match rx.recv_timeout(QUERY_WAIT) {
+            Ok(Ok(v)) => {
                 if let Ok(mut c) = self.qcache.lock() {
                     c.push_front((key, v.clone()));
                     c.truncate(QUERY_CACHE);
                 }
                 Some(v)
             }
-            Err(err) => {
+            Ok(Err(err)) => {
                 tracing::warn!(error = %err, "cannot embed the query; searching with words");
+                None
+            }
+            Err(_) => {
+                tracing::warn!("embedding the query took over 2 s; searching with words");
                 None
             }
         }
     }
 
     /// Install the embedder, rebuild the index for it, and start embedding.
-    pub fn start_embedder(self: &Arc<Self>, e: Shared) {
+    pub async fn start_embedder(self: &Arc<Self>, e: Shared) {
         if let Ok(mut s) = self.status.write() {
             s.model = Some(e.id());
             s.problem = None;
@@ -335,52 +409,58 @@ impl Search {
         if let Ok(mut x) = self.embedder.write() {
             *x = Some(e.clone());
         }
-        if let Ok(mut st) = self.store.lock()
-            && let Ok(n) = st.prune_other_models(&e.id(), e.dims())
-            && n > 0
-        {
-            tracing::info!(removed = n, "dropped vectors of an earlier model");
-        }
-        self.reindex(self.catalog());
+        let me = self.clone();
+        let e2 = e.clone();
+        let _ = tokio::task::spawn_blocking(move || {
+            if let Ok(mut st) = me.store.lock()
+                && let Ok(n) = st.prune_other_models(&e2.id(), e2.dims())
+                && n > 0
+            {
+                tracing::info!(removed = n, "dropped vectors of an earlier model");
+            }
+            me.reindex();
+        })
+        .await;
         let me = self.clone();
         tokio::spawn(async move { me.embed_loop(e).await });
     }
 
+    /// Embed what the current index lacks; start over when a newer index
+    /// arrives. A batch error is retried text by text: texts the backend
+    /// refuses are left to words, and if every text fails the backend is
+    /// down, so wait (30 s, doubling to 10 min) and try again.
     async fn embed_loop(self: Arc<Self>, e: Shared) {
         let mut rx = self.wake.subscribe();
+        let mut wait = Duration::from_secs(30);
         loop {
+            rx.mark_unchanged();
             let started = Instant::now();
             let mut did = 0usize;
-            loop {
-                let idx = self.index();
-                let missing = idx.missing();
-                if missing.is_empty() {
-                    break;
+            let idx = self.index();
+            let refused = self.refused.lock().map(|r| r.clone()).unwrap_or_default();
+            let missing: Vec<([u8; 32], String)> = idx
+                .missing()
+                .into_iter()
+                .filter(|(h, _)| !refused.contains(h))
+                .collect();
+            let mut outage = false;
+            for batch in missing.chunks(BATCH) {
+                if !Arc::ptr_eq(&idx, &self.index()) {
+                    break; // a newer index: start over with it
                 }
-                let batch: Vec<([u8; 32], String)> = missing.into_iter().take(BATCH).collect();
-                let e2 = e.clone();
-                let texts: Vec<String> = batch.iter().map(|(_, t)| t.clone()).collect();
-                let res = tokio::task::spawn_blocking(move || {
-                    let refs: Vec<&str> = texts.iter().map(String::as_str).collect();
-                    e2.embed_documents(&refs)
-                })
-                .await;
-                let vecs = match res {
-                    Ok(Ok(v)) => v,
-                    Ok(Err(err)) => {
-                        tracing::warn!(error = %err, "embedding failed; retrying in 30 s");
-                        self.set_problem(Some(format!("embedding failed: {err}")));
-                        tokio::time::sleep(Duration::from_secs(30)).await;
-                        continue;
-                    }
-                    Err(_) => break,
+                let rows = self.embed_batch(&e, batch).await;
+                let Some(rows) = rows else {
+                    outage = true;
+                    break;
                 };
-                self.set_problem(None);
-                let rows: Vec<([u8; 32], Vec<f32>)> =
-                    batch.iter().map(|(h, _)| *h).zip(vecs).collect();
                 did += rows.len();
                 let by: HashMap<[u8; 32], Vec<f32>> = rows.iter().cloned().collect();
                 idx.set_vectors(&by);
+                // A swap during this batch: the new index shares most chunks.
+                let cur = self.index();
+                if !Arc::ptr_eq(&idx, &cur) {
+                    cur.set_vectors(&by);
+                }
                 let store = self.store.clone();
                 let id = e.id();
                 let _ = tokio::task::spawn_blocking(move || {
@@ -392,18 +472,99 @@ impl Search {
                 })
                 .await;
             }
+            if outage {
+                tokio::time::sleep(wait).await;
+                wait = (wait * 2).min(Duration::from_secs(600));
+                continue;
+            }
+            wait = Duration::from_secs(30);
+            if !Arc::ptr_eq(&idx, &self.index()) {
+                continue;
+            }
             if did > 0 {
                 let ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
                 tracing::info!(chunks = did, ms, "indexed");
                 if let Ok(mut s) = self.status.write() {
                     s.last_index_ms = Some(ms);
                 }
+                self.prune_unused(&e, &idx).await;
             }
             self.run_repo_golden().await;
             if rx.changed().await.is_err() {
                 return;
             }
         }
+    }
+
+    /// One batch; on error, text by text. `None`: the backend is down.
+    async fn embed_batch(
+        &self,
+        e: &Shared,
+        batch: &[([u8; 32], String)],
+    ) -> Option<Vec<([u8; 32], Vec<f32>)>> {
+        let run = |texts: Vec<String>| {
+            let e = e.clone();
+            tokio::task::spawn_blocking(move || {
+                let refs: Vec<&str> = texts.iter().map(String::as_str).collect();
+                e.embed_documents(&refs)
+            })
+        };
+        let texts: Vec<String> = batch.iter().map(|(_, t)| t.clone()).collect();
+        match run(texts).await {
+            Ok(Ok(v)) => {
+                self.set_problem(None);
+                return Some(batch.iter().map(|(h, _)| *h).zip(v).collect());
+            }
+            Ok(Err(err)) => {
+                tracing::warn!(error = %err, "embedding a batch failed; trying text by text")
+            }
+            Err(_) => return None,
+        }
+        let mut rows = Vec::new();
+        let mut failed = Vec::new();
+        let mut last_err = String::new();
+        for (h, t) in batch {
+            match run(vec![t.clone()]).await {
+                Ok(Ok(mut v)) if v.len() == 1 => rows.push((*h, v.remove(0))),
+                Ok(Err(err)) => {
+                    last_err = err.to_string();
+                    failed.push(*h);
+                }
+                _ => failed.push(*h),
+            }
+        }
+        if rows.is_empty() {
+            tracing::warn!(error = %last_err, "the embedder fails on every text; waiting before trying again");
+            self.set_problem(Some(format!("embedding failed: {last_err}")));
+            return None;
+        }
+        if !failed.is_empty() {
+            tracing::warn!(chunks = failed.len(), error = %last_err, "the embedder refused some chunks; they stay word-search only");
+            if let Ok(mut r) = self.refused.lock() {
+                r.extend(failed);
+            }
+        }
+        Some(rows)
+    }
+
+    /// Keep the cache near the size of what is indexed: once it holds more
+    /// than twice the current chunks (edits leave old vectors behind), drop
+    /// the active model's vectors no chunk uses.
+    async fn prune_unused(&self, e: &Shared, idx: &Arc<Index>) {
+        let store = self.store.clone();
+        let (id, dims) = (e.id(), e.dims());
+        let keep = idx.hashes();
+        let _ = tokio::task::spawn_blocking(move || {
+            if let Ok(mut s) = store.lock()
+                && s.vector_count(&id, dims).unwrap_or(0) > 2 * keep.len() + 1000
+            {
+                match s.retain_vectors(&id, dims, &keep) {
+                    Ok(n) => tracing::info!(removed = n, "pruned unused vectors"),
+                    Err(err) => tracing::warn!(error = %err, "cannot prune vectors"),
+                }
+            }
+        })
+        .await;
     }
 
     /// Every source's golden.yaml against the full index; failures warn.
@@ -431,20 +592,33 @@ impl Search {
         }
     }
 
-    /// The built-in check (§9.4) against the self-docs only (or the golden
-    /// file's refs). Embeds its own small index; vectors come from the cache.
+    /// The built-in check (§9.4) against the self-docs only (or the repos the
+    /// golden file names). An embedder error is not a result: it is retried
+    /// (5 s, doubling to 5 min) while `/readyz` stays 503.
     pub async fn run_builtin(
         self: &Arc<Self>,
         self_docs: Option<Vec<InputFile>>,
         golden_file: Option<PathBuf>,
         limits: Limits,
     ) -> Builtin {
-        let me = self.clone();
-        let res = tokio::task::spawn_blocking(move || {
-            me.builtin_blocking(self_docs, golden_file, &limits)
-        })
-        .await
-        .unwrap_or_else(|e| Err(e.to_string()));
+        let mut wait = Duration::from_secs(5);
+        let res = loop {
+            let me = self.clone();
+            let (d, g) = (self_docs.clone(), golden_file.clone());
+            let res = tokio::task::spawn_blocking(move || me.builtin_blocking(d, g, &limits))
+                .await
+                .unwrap_or_else(|e| Err(Retry::No(e.to_string())));
+            match res {
+                Err(Retry::Yes(e)) => {
+                    tracing::warn!(error = %e, "the built-in golden check can't embed yet; retrying");
+                    self.set_problem(Some(e));
+                    tokio::time::sleep(wait).await;
+                    wait = (wait * 2).min(Duration::from_secs(300));
+                }
+                Err(Retry::No(e)) => break Err(e),
+                Ok(r) => break Ok(r),
+            }
+        };
         let (state, results) = match res {
             Ok(None) => (Builtin::Skipped, Vec::new()),
             Ok(Some(r)) if r.iter().any(golden::Result::failed) => (Builtin::Fail, r),
@@ -467,6 +641,9 @@ impl Search {
         if let Ok(mut s) = self.status.write() {
             s.builtin = state;
             s.builtin_results = results;
+            if state != Builtin::Fail {
+                s.problem = None;
+            }
         }
         self.golden_ok.store(
             matches!(state, Builtin::Pass | Builtin::Skipped),
@@ -480,70 +657,78 @@ impl Search {
         self_docs: Option<Vec<InputFile>>,
         golden_file: Option<PathBuf>,
         limits: &Limits,
-    ) -> Result<Option<Vec<golden::Result>>, String> {
+    ) -> Result<Option<Vec<golden::Result>>, Retry> {
         let emb = self.embedder();
-        let (idx, qs, filter) = if let Some(files) = self_docs {
+        let (cat, qs) = if let Some(files) = self_docs {
             let (repo, diags) = parse_repo(&files, Some(firelight_format::SELF_REPO), limits);
-            let repo = repo.ok_or_else(|| format!("the self-docs don't parse: {diags:?}"))?;
+            let repo =
+                repo.ok_or_else(|| Retry::No(format!("the self-docs don't parse: {diags:?}")))?;
             let qs: Vec<(String, GoldenQuestion)> = repo
                 .golden
                 .iter()
                 .map(|q| (repo.id.clone(), q.clone()))
                 .collect();
-            let cat = Arc::new(catalog::build(vec![repo], Strictness::Lenient));
-            (
-                self.embedded_index(cat, emb.as_ref())?,
-                qs,
-                Filter::default(),
-            )
+            (catalog::build(vec![repo], Strictness::Lenient), qs)
         } else if let Some(path) = golden_file {
-            let qs = read_golden_file(&path, limits)?;
-            let repos: BTreeSet<String> = qs
+            let qs = read_golden_file(&path, limits).map_err(Retry::No)?;
+            let names: BTreeSet<String> = qs
                 .iter()
                 .flat_map(|(_, q)| q.expect.iter().map(|(r, _)| r.repo.clone()))
                 .collect();
-            let cur = self.index();
-            let filter = Filter {
-                repos: Some(repos),
-                ..Filter::default()
-            };
-            (
-                self.embedded_index(cur.cat.clone(), emb.as_ref())?,
-                qs,
-                filter,
-            )
+            // Only the repos the file names, as they are served now.
+            let latest = self.latest.read().map(|c| c.clone()).unwrap_or_default();
+            let repos: Vec<_> = latest
+                .repos
+                .iter()
+                .filter(|r| names.contains(&r.id))
+                .cloned()
+                .collect();
+            (catalog::build(repos, Strictness::Lenient), qs)
         } else {
             tracing::warn!(
                 "self_docs is off and no golden_file is set: the built-in golden check is skipped"
             );
             return Ok(None);
         };
-        let e2 = emb.clone();
-        Ok(Some(golden::run(&idx, &qs, &filter, &move |q| {
-            e2.as_ref().and_then(|e| e.embed_query(q).ok())
+        let idx = self.embedded_index(Arc::new(cat), emb.as_ref())?;
+        // Embed every question first: an embedder error must not turn a
+        // `needs: meaning` question into "skipped" (a broken model would pass).
+        let mut vecs: HashMap<String, Vec<f32>> = HashMap::new();
+        if let Some(e) = &emb {
+            for (_, q) in &qs {
+                let v = e
+                    .embed_query(&q.query)
+                    .map_err(|x| Retry::Yes(format!("embedding a golden question failed: {x}")))?;
+                vecs.insert(q.query.clone(), v);
+            }
+        }
+        Ok(Some(golden::run(&idx, &qs, &Filter::default(), &|q| {
+            vecs.get(q).cloned()
         })))
     }
 
     /// A fully embedded index over `cat` (cache first), for the golden check.
-    fn embedded_index(&self, cat: Arc<Catalog>, emb: Option<&Shared>) -> Result<Index, String> {
+    fn embedded_index(&self, cat: Arc<Catalog>, emb: Option<&Shared>) -> Result<Index, Retry> {
         let Some(e) = emb else {
-            return Index::words_only(cat);
+            return Index::words_only(cat).map_err(Retry::No);
         };
         let e2 = e.clone();
         let idx = Index::build(cat, Some(e.id()), e.max_tokens(), &move |t| {
             e2.count_tokens(t)
-        })?;
+        })
+        .map_err(Retry::No)?;
         if let Ok(store) = self.store.lock()
             && let Ok(v) = store.vectors(&e.id(), e.dims(), &idx.hashes())
         {
             idx.set_vectors(&v);
         }
         let missing = idx.missing();
-        if !missing.is_empty() {
-            let texts: Vec<&str> = missing.iter().map(|(_, t)| t.as_str()).collect();
-            let vecs = e.embed_documents(&texts).map_err(|x| x.to_string())?;
-            let rows: Vec<([u8; 32], Vec<f32>)> =
-                missing.iter().map(|(h, _)| *h).zip(vecs).collect();
+        for batch in missing.chunks(BATCH) {
+            let texts: Vec<&str> = batch.iter().map(|(_, t)| t.as_str()).collect();
+            let vecs = e
+                .embed_documents(&texts)
+                .map_err(|x| Retry::Yes(format!("embedding the golden set failed: {x}")))?;
+            let rows: Vec<([u8; 32], Vec<f32>)> = batch.iter().map(|(h, _)| *h).zip(vecs).collect();
             idx.set_vectors(&rows.iter().cloned().collect());
             if let Ok(mut s) = self.store.lock() {
                 let _ = s.put_vectors(&e.id(), &rows);
@@ -638,6 +823,45 @@ mod tests {
             let state = s.run_builtin(docs, None, Limits::default()).await;
             assert_eq!(state, Builtin::Pass, "{:?}", s.info().golden_failures);
             assert!(s.golden_ok.load(Ordering::SeqCst));
+        }
+    }
+
+    fn self_docs_catalog() -> Arc<Catalog> {
+        let (repo, _) = parse_repo(
+            &crate::hub::self_docs_files(),
+            Some(firelight_format::SELF_REPO),
+            &Limits::default(),
+        );
+        Arc::new(catalog::build(
+            repo.into_iter().collect(),
+            Strictness::Lenient,
+        ))
+    }
+
+    /// Catalog updates and the embedder arriving, in any order and at once,
+    /// always end with the newest catalog indexed for the embedder.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn the_newest_catalog_and_the_embedder_always_win() {
+        for round in 0..20 {
+            let s = search_with(None);
+            let old = Arc::new(Catalog::default());
+            let new = self_docs_catalog();
+            s.set_catalog(old);
+            let e: Shared = Arc::new(firelight_embed::Fake::default());
+            let (s1, s2, n) = (s.clone(), s.clone(), new.clone());
+            let a = tokio::spawn(async move { s1.start_embedder(e).await });
+            let b = tokio::task::spawn_blocking(move || s2.set_catalog(n));
+            let _ = tokio::join!(a, b);
+            let idx = s.index();
+            assert!(
+                Arc::ptr_eq(&idx.cat, &new),
+                "round {round}: an older catalog came back"
+            );
+            assert_eq!(
+                idx.embedder.as_deref(),
+                Some("fake-64"),
+                "round {round}: words-only index won"
+            );
         }
     }
 
@@ -741,11 +965,19 @@ mod tests {
         let p = |x: f64| ms[((ms.len() as f64 - 1.0) * x).round() as usize];
         let (p50, p95) = (p(0.5), p(0.95));
         let summary = format!(
-            "### Model job\n\n| | |\n|---|---|\n| Model | `{}` |\n| Load (incl. download/verify) | {:.1} s |\n| Built-in golden | {:?} |\n| Index + golden (self-docs) | {:.1} s |\n| Query p50 | {p50:.0} ms |\n| Query p95 | {p95:.0} ms |\n",
+            "### Model job\n\n| | |\n|---|---|\n| Model | `{}` |\n| Load (incl. download/verify) | {:.1} s |\n| Built-in golden | {:?} |\n| Index + golden (self-docs) | {:.1} s |\n| Query p50 | {p50:.0} ms |\n| Query p95 | {p95:.0} ms |\n| Peak memory | {} |\n",
             e.id(),
             load.as_secs_f64(),
             state,
-            index.as_secs_f64()
+            index.as_secs_f64(),
+            // Linux: the process's high-water mark.
+            std::fs::read_to_string("/proc/self/status")
+                .ok()
+                .and_then(|t| t
+                    .lines()
+                    .find(|l| l.starts_with("VmHWM:"))
+                    .map(|l| l[6..].trim().to_string()))
+                .unwrap_or_else(|| "n/a".into())
         );
         eprintln!("{summary}");
         if let Some(path) = std::env::var_os("GITHUB_STEP_SUMMARY") {

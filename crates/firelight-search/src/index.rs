@@ -163,14 +163,29 @@ impl Index {
             .map(|s| links_in_space(&self.cat, s).into_iter().collect());
         // Owner → (kind, best chunk) per list, in rank order.
         let mut word_rank: Vec<(Kind, Ref, usize)> = Vec::new();
-        let mut seen = BTreeSet::new();
-        for (row, _) in self.fts.query(&match_expr(&q), DEPTH).unwrap_or_default() {
-            let Some(c) = self.chunks.get(row) else {
-                continue;
-            };
-            if self.visible(f, c, &links) && seen.insert((c.kind, c.owner.clone())) {
-                word_rank.push((c.kind, c.owner.clone(), row));
+        // Filters apply before the cut: look deeper until enough owners are
+        // visible or every match was seen.
+        let expr = match_expr(&q);
+        let mut depth = DEPTH;
+        loop {
+            let rows = self.fts.query(&expr, depth).unwrap_or_default();
+            word_rank.clear();
+            let mut seen = BTreeSet::new();
+            for (row, _) in &rows {
+                let Some(c) = self.chunks.get(*row) else {
+                    continue;
+                };
+                if self.visible(f, c, &links) && seen.insert((c.kind, c.owner.clone())) {
+                    word_rank.push((c.kind, c.owner.clone(), *row));
+                }
             }
+            if word_rank.len() >= limit.max(DEPTH / 10)
+                || rows.len() < depth
+                || depth >= self.chunks.len()
+            {
+                break;
+            }
+            depth = depth.saturating_mul(4);
         }
         let mut mean_rank: Vec<(Kind, Ref, usize)> = Vec::new();
         if let Some(qv) = qvec {
@@ -178,14 +193,18 @@ impl Index {
             let mut scored: Vec<(f32, usize)> = vecs
                 .iter()
                 .enumerate()
+                .filter(|(i, _)| self.visible(f, &self.chunks[*i], &links))
                 .filter_map(|(i, v)| v.as_ref().map(|v| (firelight_dot(qv, v), i)))
                 .collect();
             scored.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)));
             let mut seen = BTreeSet::new();
-            for (_, i) in scored.into_iter().take(DEPTH * 4) {
+            for (_, i) in scored.into_iter() {
                 let c = &self.chunks[i];
-                if self.visible(f, c, &links) && seen.insert((c.kind, c.owner.clone())) {
+                if seen.insert((c.kind, c.owner.clone())) {
                     mean_rank.push((c.kind, c.owner.clone(), i));
+                    if mean_rank.len() >= DEPTH {
+                        break;
+                    }
                 }
             }
         }
