@@ -16,7 +16,13 @@ use rusqlite::{Connection, OptionalExtension, params};
 use rusqlite_migration::{M, Migrations};
 
 /// The migrations, in order. Append only.
-const MIGRATIONS: &[&str] = &[include_str!("../migrations/001_sources.sql")];
+const MIGRATIONS: &[&str] = &[
+    include_str!("../migrations/001_sources.sql"),
+    include_str!("../migrations/002_embeddings.sql"),
+];
+
+pub mod fts;
+pub use fts::FtsIndex;
 
 fn migrations() -> Migrations<'static> {
     Migrations::new(MIGRATIONS.iter().map(|s| M::up(s)).collect())
@@ -361,6 +367,82 @@ impl Store {
     }
 
     /// Drop everything about sources no longer configured.
+    /// Cached vectors for `hashes` under one embedder; missing ones are absent.
+    pub fn vectors(
+        &self,
+        model: &str,
+        dims: usize,
+        hashes: &[[u8; 32]],
+    ) -> Result<std::collections::HashMap<[u8; 32], Vec<f32>>> {
+        let mut out = std::collections::HashMap::new();
+        let d = i64::try_from(dims).unwrap_or(i64::MAX);
+        let mut st = self
+            .conn
+            .prepare_cached(
+                "SELECT vec FROM embeddings WHERE model = ?1 AND dims = ?2 AND hash = ?3",
+            )
+            .map_err(|e| self.sql(e))?;
+        for h in hashes {
+            let blob: Option<Vec<u8>> = st
+                .query_row(params![model, d, &h[..]], |r| r.get(0))
+                .optional()
+                .map_err(|e| self.sql(e))?;
+            if let Some(b) = blob
+                && b.len() == dims * 4
+            {
+                out.insert(*h, from_le(&b));
+            }
+        }
+        Ok(out)
+    }
+
+    /// Store vectors (one transaction).
+    pub fn put_vectors(&mut self, model: &str, rows: &[([u8; 32], Vec<f32>)]) -> Result<()> {
+        let path = self.shown();
+        let e = |source| StoreError::Sqlite {
+            path: path.clone(),
+            source,
+        };
+        let tx = self.conn.transaction().map_err(e)?;
+        {
+            let mut st = tx
+                .prepare_cached("INSERT OR REPLACE INTO embeddings (model, dims, hash, vec) VALUES (?1, ?2, ?3, ?4)")
+                .map_err(e)?;
+            for (h, v) in rows {
+                let dims = i64::try_from(v.len()).unwrap_or(0);
+                st.execute(params![model, dims, &h[..], to_le(v)])
+                    .map_err(e)?;
+            }
+        }
+        tx.commit().map_err(e)
+    }
+
+    /// Drop every other embedder's vectors (after a model change). The active
+    /// model's rows stay, so a source that is briefly missing costs nothing.
+    pub fn prune_other_models(&mut self, model: &str, dims: usize) -> Result<usize> {
+        let d = i64::try_from(dims).unwrap_or(i64::MAX);
+        self.conn
+            .execute(
+                "DELETE FROM embeddings WHERE NOT (model = ?1 AND dims = ?2)",
+                params![model, d],
+            )
+            .map_err(|e| self.sql(e))
+    }
+
+    /// How many vectors the cache holds for one embedder.
+    pub fn vector_count(&self, model: &str, dims: usize) -> Result<usize> {
+        let d = i64::try_from(dims).unwrap_or(i64::MAX);
+        let n: i64 = self
+            .conn
+            .query_row(
+                "SELECT count(*) FROM embeddings WHERE model = ?1 AND dims = ?2",
+                params![model, d],
+                |r| r.get(0),
+            )
+            .map_err(|e| self.sql(e))?;
+        Ok(usize::try_from(n).unwrap_or(0))
+    }
+
     pub fn retain_sources(&mut self, ids: &[&str]) -> Result<()> {
         let path = self.shown();
         let err = |source| StoreError::Sqlite {
@@ -384,3 +466,15 @@ impl Store {
 
 #[cfg(test)]
 mod tests;
+
+fn to_le(v: &[f32]) -> Vec<u8> {
+    v.iter().flat_map(|x| x.to_le_bytes()).collect()
+}
+
+fn from_le(b: &[u8]) -> Vec<f32> {
+    b.as_chunks::<4>()
+        .0
+        .iter()
+        .map(|c| f32::from_le_bytes(*c))
+        .collect()
+}

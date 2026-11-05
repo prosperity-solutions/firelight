@@ -101,7 +101,14 @@ pub async fn start(cfg: &Config) -> anyhow::Result<Started> {
         limits: limits(cfg),
         clock: Arc::new(SystemClock),
     };
-    let hub = Hub::new(specs, puller, store, limits(cfg), cfg.self_docs);
+    let hub = Hub::new(
+        specs,
+        puller,
+        store,
+        limits(cfg),
+        cfg.self_docs,
+        &cfg.embedder,
+    );
     let warm = hub.load_cache() && !cfg.sources.is_empty();
     let (tx, wake) = mpsc::channel(64);
     let webhook = cfg.webhook_secret.as_ref().map(|secret| Webhook {

@@ -6,9 +6,13 @@ mod check;
 mod config;
 mod hub;
 mod preview;
+mod search;
 mod sources;
 
 use std::process::ExitCode;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 
 use clap::{Parser, Subcommand};
 
@@ -231,6 +235,28 @@ fn init_logging_with(level: &str, format: &str) {
     }
 }
 
+/// The embedder settings from the config.
+fn embed_config(cfg: &Config) -> search::EmbedConfig {
+    search::EmbedConfig {
+        backend: cfg.embedder.clone(),
+        model: cfg.embed_model.clone(),
+        revision: cfg.embed_revision.clone(),
+        sha256: cfg.embed_sha256.clone(),
+        hf_endpoint: cfg
+            .embed_hf_endpoint
+            .as_str()
+            .trim_end_matches('/')
+            .to_string(),
+        path: cfg.embed_path.clone(),
+        base_url: cfg
+            .embed_base_url
+            .as_ref()
+            .map(|u| u.as_str().trim_end_matches('/').to_string()),
+        api_key: cfg.embed_api_key.as_ref().map(|k| k.0.clone()),
+        models_dir: cfg.data_dir.clone(),
+    }
+}
+
 fn serve(cfg: Config) -> anyhow::Result<()> {
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -253,20 +279,67 @@ fn serve(cfg: Config) -> anyhow::Result<()> {
         if let Some(w) = started.webhook {
             state = state.with_webhook(w);
         }
-        let ready = state.clone();
+        // Ready = the catalog is loaded (warm cache or first round of pulls)
+        // and the built-in golden check passed (§3, §9.4).
+        let sources_ready = Arc::new(AtomicBool::new(false));
+        let search = started.hub.search.clone();
+        let update: Arc<dyn Fn() + Send + Sync> = {
+            let (state, sources_ready, search) = (state.clone(), sources_ready.clone(), search.clone());
+            Arc::new(move || {
+                state.set_ready(sources_ready.load(Ordering::SeqCst) && search.golden_ok.load(Ordering::SeqCst));
+            })
+        };
         if started.warm {
             tracing::info!("serving the cached catalog while the first pulls run");
-            ready.set_ready(true);
+            sources_ready.store(true, Ordering::SeqCst);
         }
         let hub = started.hub.clone();
         let _wake_tx = started.wake_tx;
         let interval = cfg.poll_interval;
-        let ready_after_pull = ready.clone();
+        let (after_pull, sr) = (update.clone(), sources_ready.clone());
         tokio::spawn(hub.run(interval, started.wake, move || {
             // A cold start is ready once every source was tried once (§3).
-            ready_after_pull.set_ready(true);
+            sr.store(true, Ordering::SeqCst);
+            after_pull();
         }));
-        firelight_server::serve(cfg.listen, state, move |addr| tracing::info!(%addr, "listening"), firelight_server::shutdown_signal()).await?;
+        // The model loads after the server listens: /healthz answers during a
+        // first download, /readyz says 503 until the golden check passes.
+        let (fail_tx, fail_rx) = tokio::sync::oneshot::channel::<String>();
+        let embed = embed_config(&cfg);
+        let (self_docs, golden_file, limits) = (cfg.self_docs, cfg.golden_file.clone(), sources::limits(&cfg));
+        tokio::spawn(async move {
+            let mut wait = Duration::from_secs(5);
+            let emb = loop {
+                match search::load_embedder(&embed).await {
+                    Ok(e) => break e,
+                    // A remote endpoint may come up later; a model that can't
+                    // be verified never will.
+                    Err(e) if embed.backend == "openai-compatible" => {
+                        tracing::warn!(error = %e, "the embeddings endpoint isn't answering; retrying");
+                        search.set_problem(Some(e));
+                        tokio::time::sleep(wait).await;
+                        wait = (wait * 2).min(Duration::from_secs(300));
+                    }
+                    Err(e) => {
+                        let _ = fail_tx.send(e);
+                        return;
+                    }
+                }
+            };
+            if let Some(e) = emb {
+                tracing::info!(embedder = %e.id(), dims = e.dims(), "embedder ready");
+                search.start_embedder(e);
+            }
+            let docs = self_docs.then(hub::self_docs_files);
+            let state = search.run_builtin(docs, golden_file, limits).await;
+            tracing::info!(result = ?state, "built-in golden check");
+            update();
+        });
+        let server = firelight_server::serve(cfg.listen, state, move |addr| tracing::info!(%addr, "listening"), firelight_server::shutdown_signal());
+        tokio::select! {
+            r = server => r?,
+            Ok(e) = fail_rx => anyhow::bail!("the embedder can't start: {e}"),
+        }
         Ok(())
     })
 }

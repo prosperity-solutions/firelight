@@ -832,6 +832,52 @@ pub fn load(inputs: &Inputs, purpose: Purpose) -> Result<Config, Problems> {
             None
         }
     };
+    if embedder == "candle"
+        && embed_path.is_none()
+        && !firelight_embed::model::valid_repo(&embed_model)
+    {
+        prob(
+            &mut problems,
+            "embed.model",
+            &origin_of("embed.model"),
+            format!(
+                "{embed_model:?} is not a Hugging Face model id: owner/name, letters, digits, . _ -"
+            ),
+        );
+    }
+    if let Some(s) = &embed_sha256 {
+        match crate::search::parse_sha256(s) {
+            Err(e) => prob(&mut problems, "embed.sha256", &origin_of("embed.sha256"), e),
+            Ok(m) => {
+                for (f, h) in &m {
+                    if !firelight_embed::model::FILES.contains(&f.as_str())
+                        || !firelight_embed::model::is_hex(h, 64)
+                    {
+                        prob(
+                            &mut problems,
+                            "embed.sha256",
+                            &origin_of("embed.sha256"),
+                            format!(
+                                "{f}={h}: the file must be one of {:?} and the hash 64 hex characters",
+                                firelight_embed::model::FILES
+                            ),
+                        );
+                    }
+                }
+            }
+        }
+    }
+    if embedder == "openai-compatible"
+        && let Some(u) = &embed_base_url
+        && let Err(e) = firelight_embed::openai::check_base(u.as_str(), embed_api_key.is_some())
+    {
+        prob(
+            &mut problems,
+            "embed.base_url",
+            &origin_of("embed.base_url"),
+            e.to_string(),
+        );
+    }
     if embedder == "openai-compatible" && embed_base_url.is_none() {
         prob(&mut problems, "embed.base_url", &origin_of("embed.base_url"), "required with embedder = openai-compatible. Set FIRELIGHT_EMBED_BASE_URL, e.g. http://ollama:11434/v1".into());
     }

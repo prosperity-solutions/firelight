@@ -204,3 +204,24 @@ fn every_migration_step_reaches_the_same_database() {
 fn migrations_validate() {
     assert!(migrations().validate().is_ok());
 }
+
+#[test]
+fn vectors_round_trip_and_prune() {
+    let mut s = Store::memory().unwrap_or_else(|e| panic!("{e}"));
+    let a = [1u8; 32];
+    let b = [2u8; 32];
+    s.put_vectors("m1", &[(a, vec![0.5, -1.0]), (b, vec![0.0, 1.0])])
+        .unwrap_or_else(|e| panic!("{e}"));
+    s.put_vectors("m2", &[(a, vec![1.0, 0.0, 0.0])])
+        .unwrap_or_else(|e| panic!("{e}"));
+    let got = s.vectors("m1", 2, &[a, [9u8; 32]]).unwrap_or_default();
+    assert_eq!(got.len(), 1);
+    assert_eq!(got.get(&a), Some(&vec![0.5, -1.0]));
+    assert!(
+        s.vectors("m1", 3, &[a]).unwrap_or_default().is_empty(),
+        "dims are part of the key"
+    );
+    assert_eq!(s.prune_other_models("m1", 2).unwrap_or(0), 1);
+    assert_eq!(s.vector_count("m1", 2).unwrap_or(0), 2);
+    assert_eq!(s.vector_count("m2", 3).unwrap_or(9), 0);
+}

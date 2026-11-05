@@ -1,0 +1,32 @@
+---
+source: crates/firelight-search/tests/ranking.rs
+expression: "lines.join(\"\\n\")"
+---
+Concept acme-infra/access-model None | Access model (permissions, roles, rbac)
+Concept acme-infra/access-model Some("what-it-is-not") | Access model › What it is not (permissions, roles, rbac)
+Concept acme-infra/argocd None | Argo CD (argo, gitops, deployments)
+Concept acme-infra/argocd Some("what-it-is-not") | Argo CD › What it is not (argo, gitops, deployments)
+Guide acme-infra/request-access None | Request access rights (just-in-time access, elevate, admin rights)
+Guide acme-infra/request-access Some("what-it-does-not-do") | Request access rights › What it does not do (just-in-time access, elevate, admin rights)
+Concept acme-app/release-train None | Release train (releases, shipping days)
+Concept acme-app/release-train Some("what-it-is-not") | Release train › What it is not (releases, shipping days)
+Guide acme-app/deploy-an-app None | Deploy the app (deploy, ship, rollout)
+Guide acme-app/deploy-an-app Some("hotfixes") | Deploy the app › Hotfixes (deploy, ship, rollout)
+Guide acme-app/onboarding None | Onboarding (first day, new joiner)
+Link acme-infra/argo-production None | Argo CD
+Link acme-infra/argo-staging None | Argo CD
+Link acme-infra/traces-staging None | Traces
+Link acme-infra/access-portal None | Access
+Link acme-infra/cloud-console None | Cloud console
+Link acme-infra/status-page None | Status
+Link acme-app/app-production None | App
+Link acme-app/api-production None | API
+Link acme-app/app-staging None | App
+Link acme-app/app-demo None | App
+Link acme-app/errors None | Errors
+Link acme-app/team-chat None | Team chat
+Link acme-app/ticketing None | Tickets
+Link acme-app/old-dashboard None | Old dashboard
+Link acme-app/repo None | acme-app
+Repo acme-infra/acme-infra None | Infra
+Repo acme-app/acme-app None | App

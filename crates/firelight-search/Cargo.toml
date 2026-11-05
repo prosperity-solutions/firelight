@@ -10,6 +10,13 @@ publish.workspace = true
 
 [dependencies]
 firelight-format = { path = "../firelight-format" }
+firelight-store = { path = "../firelight-store" }
+sha2 = "0.10"
+
+[dev-dependencies]
+firelight-embed = { path = "../firelight-embed" }
+firelight-source = { path = "../firelight-source" }
+insta = { version = "1", default-features = false }
 
 [lints]
 workspace = true

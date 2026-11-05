@@ -88,7 +88,7 @@ impl Setup {
                 creds: Credentials::Anonymous,
             },
         };
-        Hub::new(vec![spec], puller, store, Limits::default(), true)
+        Hub::new(vec![spec], puller, store, Limits::default(), true, "off")
     }
 }
 

@@ -26,6 +26,18 @@ agent. Content never lives in Firelight: git is the truth, Firelight is a lens.
 2. `veld start firelight` (the acme fixtures, word search only, ready in seconds).
 3. Open the URL it prints. `just test` runs the tests; `firelight preview .` shows any repo's `.firelight/` with live reload.
 
+## Search and the model
+
+Search ranks by words (SQLite FTS5) and by meaning (an embedding model), and
+fuses the two. The default model, `Qwen/Qwen3-Embedding-0.6B`, runs in-process
+on the CPU: no GPU and no API key. It is downloaded once (1.2 GB), checked
+against checksums compiled into the binary, and cached in the data folder.
+Measured on a laptop: about 0.2 s per query and per chunk indexed, and up to
+3.9 GiB of memory while the model loads. `FIRELIGHT_EMBEDDER=openai-compatible`
+uses a server instead (Ollama, vLLM, OpenAI; chunk text then leaves the
+process), and `FIRELIGHT_EMBEDDER=off` keeps word search only, which is fully
+supported.
+
 ## Security
 
 Firelight serves plain HTTP. HTTPS, single sign-on and IP rules belong to a

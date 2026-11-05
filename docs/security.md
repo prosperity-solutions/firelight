@@ -33,6 +33,23 @@ reverse proxy. Basic auth and MCP tokens exist so a bare install isn't open,
 and nothing more. The Host and Origin checks block DNS rebinding against
 installs with auth `none`.
 
+## The embedding model
+
+- **Never unverified.** The default model's revision and the sha256 or git
+  blob SHA-1 of each of its three files are compiled into the binary. Other
+  models are checked against the revision's file listing on huggingface.co;
+  from a mirror, against `embed.sha256`, because a mirror's listing and files
+  come from the same server. Files are written under a temporary name and
+  renamed only after their checksum matches; a failure stops the server.
+- **Paths stay inside the data folder.** The model id must be `owner/name`
+  of plain characters, and the revision a 40-hex commit.
+- **`openai-compatible` sends chunk text out.** The key goes only over https
+  or to a loopback host, redirects are never followed, responses are capped,
+  and errors never contain the key or a response body.
+- **Known advisories:** candle 0.11.0 pulls `zip` 8.x, whose advisories are
+  about extracting archives. Firelight loads only `.safetensors` and never
+  opens a zip; `deny.toml` lists them until candle 0.11.1 passes the 7-day rule.
+
 ## The supply chain
 
 **Walls** (a hostile pull request can't remove them):
