@@ -1,7 +1,7 @@
 // Command palette (Ctrl/Cmd+K, "/", or focusing the header search box).
 import { isHidden } from "./hide.js";
 import { showRef } from "./show.js";
-import { backdropClose, debounce, getJson, h, openDialog, space } from "./util.js";
+import { backdropClose, debounce, getJson, h, openDialog, safeHref, space } from "./util.js";
 
 const KINDS = { guide: "Guide", concept: "Concept", link: "Link", repo: "Repo" };
 
@@ -34,24 +34,30 @@ export function initPalette() {
     index = hits.length ? (i + hits.length) % hits.length : -1;
     [...results.children].forEach((li, n) => {
       const on = n === index;
-      li.setAttribute("aria-selected", String(on));
+      const opt = li.firstElementChild;
+      opt.setAttribute("aria-selected", String(on));
+      li.classList.toggle("on", on);
       if (on) {
         li.scrollIntoView({ block: "nearest" });
-        input.setAttribute("aria-activedescendant", li.id);
+        input.setAttribute("aria-activedescendant", opt.id);
       }
     });
   }
 
   function go(hit) {
+    const url = safeHref(hit.url);
+    if (!url) return;
     dialog.close();
-    location.href = hit.url;
+    location.href = url;
   }
 
   function showMe(hit) {
     dialog.close();
     let target;
+    const show = safeHref(hit.show);
+    if (!show) return;
     try {
-      target = new URL(hit.show, location.href);
+      target = new URL(show, location.href);
     } catch {
       return;
     }
@@ -65,14 +71,17 @@ export function initPalette() {
   }
 
   function row(hit, n) {
-    const li = h("li", { id: "palette-hit-" + n, role: "option", "aria-selected": "false" });
-    li.append(h("span", { className: "kind", textContent: KINDS[hit.kind] || String(hit.kind || "") }));
-    li.append(h("span", { className: "title", textContent: String(hit.title ?? hit.ref ?? "") }));
-    if (hit.repo) li.append(h("span", { className: "repo", textContent: String(hit.repo) }));
-    const line = hit.summary || hit.where;
-    if (line) li.append(h("span", { className: "summary", textContent: String(line) }));
+    // The option holds only text; the "Show me" button sits beside it, not inside.
+    const li = h("li", { role: "presentation" });
+    const opt = h("div", { id: "palette-hit-" + n, role: "option", className: "hit", "aria-selected": "false" });
+    li.append(opt);
+    opt.append(h("span", { className: "kind", textContent: KINDS[hit.kind] || String(hit.kind || "") }));
+    opt.append(h("span", { className: "title", textContent: String(hit.title ?? hit.ref ?? "") }));
+    if (hit.repo) opt.append(h("span", { className: "repo", textContent: String(hit.repo) }));
+    const line = hit.summary;
+    if (line) opt.append(h("span", { className: "summary", textContent: String(line) }));
     if (hit.kind === "link" && hit.show) {
-      const btn = h("button", { type: "button", className: "show-me", textContent: "Show me ✨" });
+      const btn = h("button", { type: "button", className: "show-me", tabIndex: -1, textContent: "Show me ✨" });
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
         showMe(hit);

@@ -6,7 +6,7 @@ expression: "pages::island_html(&c.0, &island, Some(\"platform\"), &mut Default:
 <h2>PR previews</h2><button type="button" class="eye" data-hide="acme-app/previews" aria-pressed="false" title="Hide">👁</button>
 <form class="template-form" method="get" action="/i/acme-app/previews">
 <input type="hidden" name="s" value="platform">
-<label>PR # <input name="pr" pattern="[0-9]{1,6}" placeholder="1234" value="4/2" required autocomplete="off"></label>
+<label>PR # <input name="pr" placeholder="1234" value="4/2" required autocomplete="off"></label>
 <button type="submit">Open</button>
 </form>
 <p class="help">Only services the PR deployed exist.</p>

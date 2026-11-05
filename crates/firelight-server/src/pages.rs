@@ -85,13 +85,15 @@ impl Resolve for PageResolve<'_> {
 }
 
 /// The shell around every page.
-pub fn layout(
+/// The shell; `ids` are the link refs that already have an `id` in `main`.
+pub fn layout_with_ids(
     ui: &Ui,
     cat: &Catalog,
     content: &dyn Content,
     space: Option<&str>,
     title: &str,
     main: &str,
+    mut ids: BTreeSet<Ref>,
 ) -> String {
     let mut h = H::new();
     let space_attr = space
@@ -162,7 +164,6 @@ pub fn layout(
         && !sp.top.is_empty()
     {
         h.raw("<ul class=\"row top\">\n");
-        let mut ids = BTreeSet::new();
         for l in &sp.top {
             h.raw("<li>")
                 .raw(&link_html(cat, l, space, &mut ids))
@@ -177,7 +178,6 @@ pub fn layout(
         && !sp.footer.is_empty()
     {
         h.raw("<ul class=\"row footer\">\n");
-        let mut ids = BTreeSet::new();
         for l in &sp.footer {
             h.raw("<li>")
                 .raw(&link_html(cat, l, space, &mut ids))
@@ -189,6 +189,18 @@ pub fn layout(
     h.raw(&dialogs(ui, cat, content));
     h.raw("</body>\n</html>\n");
     h.finish()
+}
+
+/// The shell around every page.
+pub fn layout(
+    ui: &Ui,
+    cat: &Catalog,
+    content: &dyn Content,
+    space: Option<&str>,
+    title: &str,
+    main: &str,
+) -> String {
+    layout_with_ids(ui, cat, content, space, title, main, BTreeSet::new())
 }
 
 fn icon(name: &str) -> String {
@@ -304,11 +316,6 @@ pub fn island_html(
 ) -> String {
     let mut h = H::new();
     let r = i.r.to_string();
-    let r = if i.unsorted {
-        format!("{}/unsorted", space.unwrap_or(""))
-    } else {
-        r
-    };
     let id = format!("island-{r}");
     match &i.kind {
         PlacedKind::Cards { cards } => {
@@ -357,17 +364,10 @@ pub fn island_html(
                     .as_deref()
                     .map(|p| format!(" placeholder=\"{}\"", attr(p)))
                     .unwrap_or_default();
-                // The browser's pattern attribute is anchored already: drop ^ and $.
-                let pat = inp
-                    .pattern
-                    .strip_prefix('^')
-                    .and_then(|p| p.strip_suffix('$'))
-                    .unwrap_or(&inp.pattern);
                 h.fmt(format_args!(
-                    "<label>{} <input name=\"{}\" pattern=\"{}\"{ph}{val} required autocomplete=\"off\"></label>\n",
+                    "<label>{} <input name=\"{}\"{ph}{val} required autocomplete=\"off\"></label>\n",
                     esc(&inp.label),
                     attr(&inp.name),
-                    attr(pat)
                 ));
             }
             h.raw("<button type=\"submit\">Open</button>\n</form>\n");
@@ -492,13 +492,14 @@ pub fn space_page(
             main.raw("</section>\n");
         }
         main.raw("</main>");
-        return Some(layout(
+        return Some(layout_with_ids(
             ui,
             &cat,
             content,
             Some(SPACE_ALL),
             "All",
             &main.finish(),
+            ids,
         ));
     }
     let s = cat.space(space)?;
@@ -534,13 +535,14 @@ pub fn space_page(
     }
     main.raw("</main>");
     let title = s.title.clone();
-    Some(layout(
+    Some(layout_with_ids(
         ui,
         &cat,
         content,
         Some(space),
         &title,
         &main.finish(),
+        ids,
     ))
 }
 
@@ -812,6 +814,9 @@ fn dialogs(ui: &Ui, cat: &Catalog, _content: &dyn Content) -> String {
         ""
     };
     h.raw("<dialog id=\"info\" class=\"info\" aria-label=\"About this Firelight\">\n<nav class=\"tabs\" role=\"tablist\">\n<button role=\"tab\" aria-selected=\"true\" data-tab=\"mcp\">Connect MCP</button>\n<button role=\"tab\" aria-selected=\"false\" data-tab=\"repo\">Add a repo</button>\n<button role=\"tab\" aria-selected=\"false\" data-tab=\"status\">Status</button>\n</nav>\n");
+    if cat.space(SPACE_FIRELIGHT).is_some() {
+        h.raw("<p class=\"docs-link\"><a href=\"/s/firelight\">Firelight docs</a>: how to write <code>.firelight/</code>, connect agents and run Firelight.</p>\n");
+    }
     h.raw("<section data-panel=\"mcp\">\n<p>Give your coding agent every repo's docs. In Claude Code:</p>\n");
     h.fmt(format_args!(
         "<pre class=\"copy\"><code>claude mcp add --transport http firelight {}{}</code></pre>\n",

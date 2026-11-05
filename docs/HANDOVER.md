@@ -535,27 +535,25 @@ The repo ships a `veld.json` at its root, so `veld start firelight` (or one clic
         // The acme fixture repos, word search only: starts in seconds. For UI and API work.
         "fixtures": {
           "type": "start_server",
-          "argv": ["cargo", "run", "--bin", "firelight", "--", "preview",
-                   "fixtures/acme-app", "fixtures/acme-infra",
-                   "--embedder", "off", "--listen", "127.0.0.1:${veld.port}"],
+          "argv": ["cargo", "run", "--locked", "--bin", "firelight", "--", "preview", "fixtures/acme-app", "fixtures/acme-infra", "--embedder", "off", "--listen", "127.0.0.1:${veld.port}"],
           "health_check": { "type": "http", "path": "/readyz", "expect_status": 200, "timeout_seconds": 300 }
         },
         // Firelight's own .firelight/ with the real default model: what writing Firelight docs looks like.
         "self": {
           "type": "start_server",
-          "argv": ["cargo", "run", "--release", "--bin", "firelight", "--", "preview", ".",
-                   "--listen", "127.0.0.1:${veld.port}"],
+          "argv": ["cargo", "run", "--locked", "--release", "--bin", "firelight", "--", "preview", ".", "--listen", "127.0.0.1:${veld.port}"],
           "health_check": { "type": "http", "path": "/readyz", "expect_status": 200, "timeout_seconds": 900 }
         },
-        // The real server: git sources from fixtures/histories, polling, SQLite, auth off.
+        // The real server: git sources built from fixtures/histories, polling, SQLite, auth off.
         "serve": {
           "type": "start_server",
-          "argv": ["cargo", "run", "--release", "--bin", "firelight", "--", "serve"],
+          "shell": "sh fixtures/histories/build.sh target/fixtures > /dev/null && exec cargo run --locked --release --bin firelight -- serve",
           "env": {
             "FIRELIGHT_CONFIG": "fixtures/veld/firelight.toml",
             "FIRELIGHT_SERVER_LISTEN": "127.0.0.1:${veld.port}",
             "FIRELIGHT_SERVER_PUBLIC_URL": "${veld.url}",
-            "FIRELIGHT_DATA_DIR": ".veld-data/firelight"
+            "FIRELIGHT_DATA_DIR": ".veld-data/firelight",
+            "FIRELIGHT_SOURCES": "[{\"id\":\"acme-infra\",\"kind\":\"git\",\"url\":\"file://${veld.root}/target/fixtures/acme-infra.git\"},{\"id\":\"acme-app\",\"kind\":\"git\",\"url\":\"file://${veld.root}/target/fixtures/acme-app.git\"}]"
           },
           "health_check": { "type": "http", "path": "/readyz", "expect_status": 200, "timeout_seconds": 900 }
         }

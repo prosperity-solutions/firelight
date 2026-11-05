@@ -61,6 +61,13 @@ export function safeUrl(url) {
   }
 }
 
+/** A URL to follow: `safeUrl`, or a site path (`/e/…`, not `//host`). */
+export function safeHref(url) {
+  const s = String(url ?? "");
+  if (s.startsWith("/") && !s.startsWith("//") && !s.startsWith("/\\") && !/[\s\x00-\x1f]/.test(s)) return s;
+  return safeUrl(s);
+}
+
 export function debounce(fn, ms) {
   let t = 0;
   return (...args) => {

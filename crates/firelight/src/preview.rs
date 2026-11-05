@@ -34,6 +34,13 @@ fn id_of(dir: &std::path::Path, limits: &Limits) -> String {
 }
 
 pub fn run(args: Args) -> anyhow::Result<()> {
+    // Auth is off in preview, so it never listens beyond this machine (§12.1).
+    if !args.listen.ip().is_loopback() {
+        anyhow::bail!(
+            "preview listens on loopback only (auth is off): use 127.0.0.1:<port> or [::1]:<port>, not {}",
+            args.listen
+        );
+    }
     if let Some(e) = &args.embedder
         && e != "off"
     {
@@ -68,7 +75,7 @@ pub fn run(args: Args) -> anyhow::Result<()> {
         for s in &specs {
             hub.pull(&s.id).await;
         }
-        // Report what doesn't pass, once per change, like `check` would.
+        // Report what doesn't pass at start; the watcher reports each change.
         let report = |hub: &Hub| {
             for st in hub.source_states() {
                 if let Some(d) = st.newest_diagnostics.filter(|d| d != "[]") {
@@ -83,6 +90,7 @@ pub fn run(args: Args) -> anyhow::Result<()> {
         // Live reload: re-read every folder each second.
         let watcher = hub.clone();
         let ids: Vec<String> = specs.iter().map(|s| s.id.clone()).collect();
+        let mut last: Vec<(String, Option<String>)> = Vec::new();
         tokio::spawn(async move {
             let mut t = tokio::time::interval(Duration::from_secs(1));
             loop {
@@ -93,6 +101,13 @@ pub fn run(args: Args) -> anyhow::Result<()> {
                 }
                 if changed {
                     tracing::info!("reloaded");
+                }
+                if changed || watcher.source_states().iter().any(|s| s.newest_diagnostics.as_deref().is_some_and(|d| d != "[]")) {
+                    let now = watcher.source_states().iter().map(|s| (s.source_id.clone(), s.newest_diagnostics.clone())).collect::<Vec<_>>();
+                    if now != last {
+                        report_states(&now);
+                        last = now;
+                    }
                 }
             }
         });
@@ -115,4 +130,16 @@ pub fn run(args: Args) -> anyhow::Result<()> {
         .await?;
         Ok(())
     })
+}
+
+/// Print which sources don't pass their checks, after a change.
+fn report_states(states: &[(String, Option<String>)]) {
+    for (id, d) in states {
+        match d.as_deref() {
+            Some(d) if d != "[]" => eprintln!(
+                "firelight preview: {id} doesn't pass its checks, so the last good version shows: {d}"
+            ),
+            _ => {}
+        }
+    }
 }

@@ -216,9 +216,9 @@ never `innerHTML` with server strings) or show the error. Debounce 200 ms.
 ```json
 {"hits":[
   {"kind":"guide","ref":"acme-infra/request-access","title":"Request access rights","repo":"acme-infra",
-   "summary":"…","heading":"What it does not do","url":"/e/acme-infra/request-access#what-it-does-not-do","stale":false},
-  {"kind":"link","ref":"acme-infra/access-portal","title":"Access","repo":"acme-infra","url":"https://access.acme.example",
-   "where":"top row","show":"/s/platform#acme-infra/access-portal"}
+   "summary":"…","heading":"What it does not do","url":"/e/acme-infra/request-access?s=platform#what-it-does-not-do"},
+  {"kind":"link","ref":"acme-infra/access-portal","title":"Access","repo":"acme-infra","summary":"",
+   "url":"https://access.acme.example","show":"/s/platform#acme-infra/access-portal"}
 ]}
 ```
 

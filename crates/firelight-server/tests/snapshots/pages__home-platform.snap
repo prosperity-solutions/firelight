@@ -87,18 +87,18 @@ expression: "pages::space_page(&ui, c.as_ref(), \"platform\",\n&BTreeMap::new())
 <h2>PR previews</h2><button type="button" class="eye" data-hide="acme-app/previews" aria-pressed="false" title="Hide">👁</button>
 <form class="template-form" method="get" action="/i/acme-app/previews">
 <input type="hidden" name="s" value="platform">
-<label>PR # <input name="pr" pattern="[0-9]{1,6}" placeholder="1234" required autocomplete="off"></label>
+<label>PR # <input name="pr" placeholder="1234" required autocomplete="off"></label>
 <button type="submit">Open</button>
 </form>
 <p class="help">Only services the PR deployed exist.</p>
 <ul class="links template-links" data-filled="false"></ul>
 <p class="template-error" hidden></p>
 </section>
-<section class="island cards unsorted" data-ref="platform/unsorted" id="island-platform/unsorted">
-<h2>Unsorted</h2><button type="button" class="eye" data-hide="platform/unsorted" aria-pressed="false" title="Hide">👁</button>
+<section class="island cards unsorted" data-ref="platform/-unsorted" id="island-platform/-unsorted">
+<h2>Unsorted</h2><button type="button" class="eye" data-hide="platform/-unsorted" aria-pressed="false" title="Hide">👁</button>
 <div class="card-grid">
-<article class="card" data-ref="/unsorted/acme-app">
-<h3>App</h3><button type="button" class="eye" data-hide="/unsorted/acme-app" aria-pressed="false" title="Hide">👁</button>
+<article class="card" data-ref="platform/-unsorted/acme-app">
+<h3>App</h3><button type="button" class="eye" data-hide="platform/-unsorted/acme-app" aria-pressed="false" title="Hide">👁</button>
 <ul class="links">
 <li><a class="link" href="https://dash.acme.example" data-ref="acme-app/old-dashboard" id="acme-app/old-dashboard"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#chart"></use></svg><span class="label">Old dashboard</span><span class="note">going away</span></a></li>
 </ul>

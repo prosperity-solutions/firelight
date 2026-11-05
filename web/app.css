@@ -223,10 +223,11 @@ dialog form[method="dialog"]:last-child { margin-top: 1rem; text-align: right; }
 .palette form input:focus-visible { outline-offset: -2px; }
 .results { max-height: 60vh; overflow: auto; }
 .results li {
-  display: flex; flex-wrap: wrap; align-items: baseline; gap: .1rem .6rem;
+  display: flex; align-items: center; gap: .6rem;
   padding: .55rem 1rem; cursor: pointer; border-left: 3px solid transparent;
 }
-.results li[aria-selected="true"] { background: var(--surface-2); border-left-color: var(--accent); }
+.results li.on { background: var(--surface-2); border-left-color: var(--accent); }
+.results .hit { display: flex; flex-wrap: wrap; align-items: baseline; gap: .1rem .6rem; flex: 1; min-width: 0; }
 .results .kind, .kind {
   font-size: .7rem; font-weight: 600; font-variant: small-caps; text-transform: lowercase;
   letter-spacing: .08em; color: var(--note); min-width: 3.5rem;

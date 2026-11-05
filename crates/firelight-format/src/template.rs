@@ -48,10 +48,14 @@ impl Url {
     }
 }
 
-/// Input names: `^[a-z][a-z0-9_]{0,31}$`.
+/// Names a template input can't use: the `/i/…` route reads them itself.
+pub const RESERVED_INPUTS: &[&str] = &["s", "format"];
+
+/// Input names: `^[a-z][a-z0-9_]{0,31}$`, not one of [`RESERVED_INPUTS`].
 pub fn valid_name(s: &str) -> bool {
     let b = s.as_bytes();
-    !b.is_empty()
+    !RESERVED_INPUTS.contains(&s)
+        && !b.is_empty()
         && b.len() <= 32
         && b[0].is_ascii_lowercase()
         && b.iter()
@@ -325,6 +329,13 @@ pub fn fill(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reserved_input_names() {
+        assert!(valid_name("pr"));
+        assert!(!valid_name("s"), "the /i/ route reads ?s= itself");
+        assert!(!valid_name("format"), "the /i/ route reads ?format= itself");
+    }
 
     fn pats(p: &str) -> BTreeMap<String, regex::Regex> {
         let mut m = BTreeMap::new();

@@ -160,9 +160,17 @@ fn run(args: &[String]) -> Result<Report, String> {
     }
 
     // Test-only npm packages.
-    let npm = |s: Option<String>| s.map(|s| npm_packages(&s)).unwrap_or_default();
-    let head_npm = npm(read_head(NPM_LOCK)?);
-    let base_npm = npm(read_base(NPM_LOCK)?);
+    let npm = |s: Option<String>| -> Result<BTreeSet<(String, String)>, String> {
+        match s {
+            None => Ok(BTreeSet::new()),
+            Some(s) if serde_json::from_str::<serde_json::Value>(&s).is_err() => {
+                Err(format!("{NPM_LOCK} is not valid JSON"))
+            }
+            Some(s) => Ok(npm_packages(&s)),
+        }
+    };
+    let head_npm = npm(read_head(NPM_LOCK)?)?;
+    let base_npm = npm(read_base(NPM_LOCK)?).unwrap_or_default();
     for (name, version) in head_npm.difference(&base_npm) {
         items.push(Item::Npm {
             name: name.clone(),

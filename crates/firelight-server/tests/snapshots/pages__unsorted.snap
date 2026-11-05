@@ -2,11 +2,11 @@
 source: crates/firelight-server/tests/pages.rs
 expression: "pages::island_html(&c.0, &unsorted, Some(\"platform\"), &mut Default::default(),\nNone)"
 ---
-<section class="island cards unsorted" data-ref="platform/unsorted" id="island-platform/unsorted">
-<h2>Unsorted</h2><button type="button" class="eye" data-hide="platform/unsorted" aria-pressed="false" title="Hide">👁</button>
+<section class="island cards unsorted" data-ref="platform/-unsorted" id="island-platform/-unsorted">
+<h2>Unsorted</h2><button type="button" class="eye" data-hide="platform/-unsorted" aria-pressed="false" title="Hide">👁</button>
 <div class="card-grid">
-<article class="card" data-ref="/unsorted/acme-app">
-<h3>App</h3><button type="button" class="eye" data-hide="/unsorted/acme-app" aria-pressed="false" title="Hide">👁</button>
+<article class="card" data-ref="platform/-unsorted/acme-app">
+<h3>App</h3><button type="button" class="eye" data-hide="platform/-unsorted/acme-app" aria-pressed="false" title="Hide">👁</button>
 <ul class="links">
 <li><a class="link" href="https://dash.acme.example" data-ref="acme-app/old-dashboard" id="acme-app/old-dashboard"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#chart"></use></svg><span class="label">Old dashboard</span><span class="note">going away</span></a></li>
 </ul>

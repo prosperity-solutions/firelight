@@ -16,7 +16,7 @@ use pulldown_cmark::{CowStr, Event, HeadingLevel, LinkType, Parser, Tag, TagEnd,
 use firelight_format::ids::{Ref, Slugger};
 use firelight_format::markdown::{Dest, classify, options};
 
-use crate::html::{attr, esc, safe_url};
+use crate::html::{attr, safe_url};
 
 /// How refs in markdown resolve on this page.
 pub trait Resolve {
@@ -90,6 +90,9 @@ impl State<'_> {
             Event::Html(h) | Event::InlineHtml(h) => out.push(Event::Text(h)),
             Event::Start(Tag::Image { .. }) => self.in_image += 1,
             Event::End(TagEnd::Image) => self.in_image = self.in_image.saturating_sub(1),
+            // Inside an image only its alt text survives, as text: no links either.
+            Event::Text(t) if self.in_image > 0 => out.push(Event::Text(t)),
+            _ if self.in_image > 0 => {}
             Event::Start(Tag::Link {
                 link_type,
                 dest_url,
@@ -107,9 +110,6 @@ impl State<'_> {
                     out.push(Event::Html(CowStr::from("</a>")));
                 }
             }
-            // Inside an image only its alt text survives, as text.
-            Event::Text(t) if self.in_image > 0 => out.push(Event::Text(t)),
-            _ if self.in_image > 0 => {}
             other => out.push(other),
         }
     }
@@ -155,23 +155,6 @@ fn link_start(
             Some(format!("<a href=\"{}\"{title_attr}>", attr(url)))
         }
     }
-}
-
-/// Plain text of markdown (for summaries in search and meta tags).
-pub fn plain(md: &str) -> String {
-    let mut s = String::new();
-    for ev in Parser::new_ext(md, options()) {
-        if let Event::Text(t) | Event::Code(t) = ev {
-            s.push_str(&t);
-            s.push(' ');
-        }
-    }
-    esc(s.trim())
-        .replace("&amp;", "&")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", "\"")
-        .replace("&#39;", "'")
 }
 
 #[cfg(test)]

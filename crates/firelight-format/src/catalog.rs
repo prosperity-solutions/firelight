@@ -63,7 +63,7 @@ pub enum PlacedKind {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlacedIsland {
-    /// `repo/id`; the Unsorted island is `<space>/unsorted` under repo `""`.
+    /// `repo/id`; the Unsorted island is `<space>/-unsorted` (unique per space, and never a real id).
     pub r: Ref,
     pub title: String,
     pub place: Place,
@@ -556,9 +556,10 @@ pub fn build(repos: Vec<Repo>, strict: Strictness) -> Catalog {
             .entry(space.clone())
             .or_insert_with(|| new_space(&space));
         sp.islands.push(PlacedIsland {
+            // "-unsorted" is never a valid id, so no real island can share this ref.
             r: Ref {
-                repo: String::new(),
-                id: "unsorted".into(),
+                repo: space.clone(),
+                id: "-unsorted".into(),
             },
             title: "Unsorted".into(),
             place: Place::Main,

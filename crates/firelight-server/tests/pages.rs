@@ -293,3 +293,48 @@ async fn default_space_redirects_and_falls_back() {
         "a missing default space shows the list, never an error"
     );
 }
+
+/// A space's search never returns another space's entry; `all` finds every
+/// entry placed in some space, but never one only in `firelight` (§5.7).
+#[test]
+fn search_stays_in_its_space() {
+    let c = acme();
+    let cat = &c.0;
+    let mut spaces: Vec<&str> = cat.spaces.iter().map(|s| s.id.as_str()).collect();
+    spaces.push(firelight_format::SPACE_ALL);
+    let mut checked = 0;
+    for repo in &cat.repos {
+        for e in &repo.entries {
+            let r = Ref {
+                repo: repo.id.clone(),
+                id: e.id.clone(),
+            };
+            for s in &spaces {
+                let hits = firelight_search::search(cat, s, &e.title, 100);
+                for h in &hits {
+                    if h.kind != firelight_search::Kind::Link {
+                        assert!(
+                            firelight_search::entry_in_space(cat, s, &h.r),
+                            "{} showed up in space {s}",
+                            h.r
+                        );
+                    }
+                }
+                let placed = cat
+                    .spaces
+                    .iter()
+                    .filter(|x| x.id != firelight_format::SPACE_FIRELIGHT)
+                    .any(|x| x.entries.contains(&r));
+                if *s == firelight_format::SPACE_ALL {
+                    assert_eq!(hits.iter().any(|h| h.r == r), placed, "{r} in all");
+                }
+                checked += 1;
+            }
+        }
+    }
+    assert!(checked > 10, "the fixtures should have entries to search");
+    // The two acme spaces don't hold the same entries, so the check above bites.
+    let a = cat.space("platform").map(|s| s.entries.clone());
+    let b = cat.space("support").map(|s| s.entries.clone());
+    assert_ne!(a, b);
+}
