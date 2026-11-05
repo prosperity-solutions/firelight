@@ -1,5 +1,17 @@
 //! Scripts: executable bits, the public-ID check, the tool pin file.
 
+/// §0.1: nobody reviews. GitHub's default extra approval for unattributed
+/// changes would block every PR of a sole owner, so the owner's hardening
+/// script states it off.
+#[test]
+fn hardening_keeps_zero_approvals() {
+    let s = read(&format!("scripts/dev/{}-public-repo.sh", "harden"));
+    assert!(s.contains("\"required_approving_review_count\": 0"));
+    assert!(s.contains("\"require_extra_approval_for_unattributed_changes\": false"));
+    assert!(s.contains("\"bypass_actors\": []"));
+    assert!(s.contains("required_signatures"));
+}
+
 use harness::{TempDir, fake_id, read, root};
 use std::io::Write;
 use std::process::{Command, Stdio};
