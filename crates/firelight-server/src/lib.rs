@@ -67,7 +67,11 @@ pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/healthz", get(healthz))
         .route("/readyz", get(readyz))
-        .route("/webhook/github", post(webhook))
+        // GitHub sends push payloads up to 25 MB.
+        .route(
+            "/webhook/github",
+            post(webhook).layer(axum::extract::DefaultBodyLimit::max(25 << 20)),
+        )
         .with_state(state)
 }
 

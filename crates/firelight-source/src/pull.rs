@@ -142,45 +142,60 @@ impl Puller {
                 git_ref,
                 creds,
             } => {
-                let auth = auth_for(url, creds).await?;
-                let commit = self.git.ls_remote(url, git_ref.as_deref(), &auth).await?;
-                if last_seen == Some(commit.as_str()) {
-                    return Ok(Pulled::Unchanged);
+                let _ = std::fs::create_dir_all(&self.git.home);
+                let result = self
+                    .pull_git(&spec.id, url, git_ref.as_deref(), creds, last_seen)
+                    .await;
+                if let (Err(PullError::Git(_)), Credentials::App(app)) = (&result, creds)
+                    && let Some((owner, _)) = owner_repo(url)
+                {
+                    // A refused token may be revoked: get a new one next time.
+                    app.invalidate(&owner).await;
                 }
-                let dir = mirror_dir(&self.data_dir, &spec.id);
-                self.git.ensure_mirror(&dir, url).await?;
-                self.git.fetch(&dir, &commit, &auth).await?;
-                let files = self
-                    .git
-                    .read_firelight(&dir, &commit, &auth, &self.limits)
-                    .await?;
-                let committed_at = self.git.commit_time(&dir, &commit).await.ok();
-                let (repo, diags) = parse_repo(&files, Some(&spec.id), &self.limits);
-                if diags.iter().any(Diagnostic::is_error) || repo.is_none() {
-                    return Ok(Pulled::Bad {
-                        commit,
-                        diagnostics: diags,
-                    });
-                }
-                let Some(repo) = repo else {
-                    return Ok(Pulled::Bad {
-                        commit,
-                        diagnostics: diags,
-                    });
-                };
-                let history = self.history(&dir, &commit, &repo).await;
-                Ok(Pulled::Good {
-                    snapshot: Snapshot {
-                        commit,
-                        committed_at,
-                        files,
-                        history,
-                    },
-                    repo: Box::new(repo),
-                    diagnostics: diags,
-                })
+                result
             }
         }
+    }
+
+    async fn pull_git(
+        &self,
+        id: &str,
+        url: &str,
+        git_ref: Option<&str>,
+        creds: &Credentials,
+        last_seen: Option<&str>,
+    ) -> Result<Pulled, PullError> {
+        let auth = auth_for(url, creds).await?;
+        let commit = self.git.ls_remote(url, git_ref, &auth).await?;
+        if last_seen == Some(commit.as_str()) {
+            return Ok(Pulled::Unchanged);
+        }
+        let dir = mirror_dir(&self.data_dir, id);
+        self.git.ensure_mirror(&dir, url).await?;
+        self.git.fetch(&dir, &commit, &auth).await?;
+        let files = self
+            .git
+            .read_firelight(&dir, &commit, &auth, &self.limits)
+            .await?;
+        let committed_at = self.git.commit_time(&dir, &commit).await.ok();
+        let (repo, diags) = parse_repo(&files, Some(id), &self.limits);
+        let Some(repo) = repo.filter(|_| !diags.iter().any(Diagnostic::is_error)) else {
+            return Ok(Pulled::Bad {
+                commit,
+                diagnostics: diags,
+            });
+        };
+        let history = self.history(&dir, &commit, &repo).await;
+        Ok(Pulled::Good {
+            snapshot: Snapshot {
+                commit,
+                committed_at,
+                files,
+                history,
+            },
+            repo: Box::new(repo),
+            diagnostics: diags,
+        })
     }
 
     async fn judge<F>(

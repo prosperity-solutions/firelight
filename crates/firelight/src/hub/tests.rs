@@ -201,3 +201,55 @@ fn the_embedded_self_docs_pass_their_own_checks() {
         "{diags:?}"
     );
 }
+
+#[tokio::test]
+async fn why_a_commit_is_rejected_survives_failed_pulls_and_restarts() {
+    let s = Setup::new("survive");
+    s.commit(&[
+        (".firelight/repo.yaml", &repo_yaml()),
+        (".firelight/concepts/argo.md", &concept("Argo")),
+    ]);
+    let hub = s.hub();
+    hub.load_cache();
+    assert!(hub.pull("infra").await);
+    s.commit(&[(
+        ".firelight/concepts/argo.md",
+        "---\nformat: 1\ntitle: Argo\nsummary: S.\nrelated: [nope]\n---\nx\n",
+    )]);
+    assert!(!hub.pull("infra").await);
+    let why = |h: &Hub| {
+        h.source_states()
+            .into_iter()
+            .find(|x| x.source_id == "infra")
+            .and_then(|x| x.newest_diagnostics)
+            .unwrap_or_default()
+    };
+    assert!(why(&hub).contains("unresolved-ref"));
+    // The remote goes away: the pull fails, the reason stays.
+    let moved = s.root.join("moved.git");
+    std::fs::rename(s.root.join("infra.git"), &moved).unwrap_or_else(|e| panic!("{e}"));
+    assert!(!hub.pull("infra").await);
+    assert!(
+        why(&hub).contains("unresolved-ref"),
+        "a failed pull erased the reason"
+    );
+    std::fs::rename(&moved, s.root.join("infra.git")).unwrap_or_else(|e| panic!("{e}"));
+    // Unchanged: still there.
+    assert!(!hub.pull("infra").await);
+    assert!(why(&hub).contains("unresolved-ref"));
+    drop(hub);
+    // A restart judges the rejected commit again (an upgrade may accept it).
+    let hub = s.hub();
+    assert!(hub.load_cache());
+    assert!(!hub.pull("infra").await);
+    let st = hub
+        .source_states()
+        .into_iter()
+        .find(|x| x.source_id == "infra")
+        .unwrap_or_default();
+    assert!(st.last_pull_error.is_none(), "{st:?}");
+    assert!(
+        why(&hub).contains("unresolved-ref"),
+        "judged again, still rejected"
+    );
+}

@@ -85,6 +85,18 @@ impl Remote {
             &["init", "--bare", "-q", "infra.git"],
             "2026-10-01T00:00:00Z",
         );
+        // Serve blobless clones and blobs by id, as GitHub does; without this
+        // git ignores --filter and the partial clone goes untested.
+        git(
+            &bare,
+            &["config", "uploadpack.allowFilter", "true"],
+            "2026-10-01T00:00:00Z",
+        );
+        git(
+            &bare,
+            &["config", "uploadpack.allowAnySHA1InWant", "true"],
+            "2026-10-01T00:00:00Z",
+        );
         git(&work, &["init", "-q"], "2026-10-01T00:00:00Z");
         git(
             &work,
@@ -150,6 +162,7 @@ async fn the_whole_life_of_a_source() {
     r.write(".firelight/concepts/access.md", CONCEPT);
     r.write("terraform/access/main.tf", "# v1\n");
     r.write("secret.txt", "not for firelight\n");
+    r.write(".firelight/.DS_Store", "\0\0binary junk");
     r.commit("first", "2026-10-01T10:00:00Z");
     let data = Tmp::new("data");
     let p = puller(&data.0);
@@ -167,6 +180,30 @@ async fn the_whole_life_of_a_source() {
         "only .firelight/ is read"
     );
     assert_eq!(snap.committed_at.as_deref(), Some("2026-10-01T10:00:00Z"));
+    // Blobless for real: the blob of a file outside .firelight/ never reached the mirror.
+    let secret_oid = String::from_utf8_lossy(
+        &Command::new("git")
+            .args(["hash-object", "secret.txt"])
+            .current_dir(&r.work)
+            .output()
+            .map(|o| o.stdout)
+            .unwrap_or_default(),
+    )
+    .trim()
+    .to_string();
+    let mirror = data.0.join("git/infra.git");
+    let present = Command::new("git")
+        .args([
+            "--git-dir",
+            mirror.to_str().unwrap_or(""),
+            "cat-file",
+            "-e",
+            &secret_oid,
+        ])
+        .env("GIT_NO_LAZY_FETCH", "1")
+        .status()
+        .is_ok_and(|s| s.success());
+    assert!(!present, "secret.txt's blob was fetched into the mirror");
     assert!(!is_stale(&snap.history[0]));
 
     // No change: nothing fetched.

@@ -87,6 +87,9 @@ impl Auth {
 pub struct Git {
     pub bin: PathBuf,
     pub timeout: Duration,
+    /// git's HOME: an empty folder Firelight owns, so no `.netrc` or user
+    /// config from a shared folder reaches git or libcurl.
+    pub home: PathBuf,
 }
 
 impl Default for Git {
@@ -94,6 +97,7 @@ impl Default for Git {
         Git {
             bin: PathBuf::from("git"),
             timeout: Duration::from_secs(300),
+            home: std::env::temp_dir().join("firelight-git-home"),
         }
     }
 }
@@ -178,7 +182,7 @@ impl Git {
             .env("GIT_TERMINAL_PROMPT", "0")
             .env("GIT_ASKPASS", "")
             .env("GCM_INTERACTIVE", "never")
-            .env("HOME", std::env::temp_dir())
+            .env("HOME", &self.home)
             .env("LC_ALL", "C");
         if let Some(h) = auth.header() {
             c.env("GIT_CONFIG_COUNT", "1")
@@ -312,7 +316,14 @@ impl Git {
             "origin",
         ])
         .arg(format!("+{commit}:{HEAD_REF}"));
-        self.run("fetch", c).await.map(|_| ())
+        self.run("fetch", c).await?;
+        // Changed-path Bloom filters make `covers` lookups cheap; best effort.
+        let mut g = self.cmd(Some(dir), &Auth::None);
+        g.args(["commit-graph", "write", "--reachable", "--changed-paths"]);
+        if let Err(e) = self.run("commit-graph", g).await {
+            tracing::debug!(error = %e, "commit-graph write failed; covers lookups are just slower");
+        }
+        Ok(())
     }
 
     /// The commit time of `commit` (RFC 3339).
@@ -325,7 +336,10 @@ impl Git {
     }
 
     /// Every file under `.firelight/` at `commit`, read from the object store
-    /// within `limits` (fetching only those blobs, on demand).
+    /// within `limits`. The listing needs only trees; the `.firelight/` blobs
+    /// are then fetched in one batch (not one lazy fetch per file), and only
+    /// those within the size limits are read. Like the folder reader, it skips
+    /// `.DS_Store` and folders deeper than [`crate::dir::MAX_DEPTH`].
     pub async fn read_firelight(
         &self,
         dir: &Path,
@@ -333,13 +347,11 @@ impl Git {
         auth: &Auth,
         limits: &Limits,
     ) -> Result<Vec<InputFile>, GitError> {
-        // mode type object size\tpath, NUL-separated; sizes come with -l.
         let mut c = self.cmd(Some(dir), auth);
-        c.args(["ls-tree", "-r", "-l", "-z", commit, "--", ".firelight/"]);
+        c.args(["ls-tree", "-r", "-z", commit, "--", ".firelight/"]);
         let out = self.run("ls-tree", c).await?;
         let mut files = Vec::new();
-        let mut wanted: Vec<(usize, String)> = Vec::new();
-        let mut total: u64 = 0;
+        let mut blobs: Vec<(usize, String)> = Vec::new();
         for rec in out.split(|b| *b == 0).filter(|r| !r.is_empty()) {
             let rec = String::from_utf8_lossy(rec);
             let Some((meta, path)) = rec.split_once('\t') else {
@@ -348,49 +360,138 @@ impl Git {
             let Some(rel) = path.strip_prefix(".firelight/") else {
                 continue;
             };
-            let f: Vec<&str> = meta.split_whitespace().collect();
-            let (mode, kind, oid, size) = (
-                f.first().copied().unwrap_or(""),
-                f.get(1).copied().unwrap_or(""),
-                f.get(2).copied().unwrap_or(""),
-                f.get(3).and_then(|s| s.parse::<u64>().ok()).unwrap_or(0),
-            );
+            if rel.rsplit('/').next() == Some(".DS_Store")
+                || rel.matches('/').count() > crate::dir::MAX_DEPTH
+            {
+                continue;
+            }
+            // One past the limit is enough for the format to report it.
             if files.len() as u64 > limits.max_files {
                 break;
             }
+            let f: Vec<&str> = meta.split_whitespace().collect();
+            let (mode, kind, oid) = (
+                f.first().copied().unwrap_or(""),
+                f.get(1).copied().unwrap_or(""),
+                f.get(2).copied().unwrap_or(""),
+            );
             let file_kind = match (mode, kind) {
                 ("120000", _) => FileKind::Symlink,
                 ("100644" | "100755", "blob") => FileKind::Regular,
-                _ => FileKind::Special, // submodules (160000) and anything else
+                _ => FileKind::Special, // a submodule (160000) or anything else
             };
             if file_kind == FileKind::Regular
-                && size <= limits.max_file_bytes
-                && total + size <= limits.max_source_bytes
+                && oid.len() >= 40
+                && oid.chars().all(|c| c.is_ascii_hexdigit())
             {
-                total += size;
-                wanted.push((files.len(), oid.to_string()));
+                blobs.push((files.len(), oid.to_string()));
             }
             files.push(InputFile {
                 path: rel.to_string(),
                 kind: file_kind,
                 contents: None,
-                size,
+                size: 0,
             });
         }
-        if !wanted.is_empty() {
-            let blobs = self
+        if blobs.is_empty() {
+            return Ok(files);
+        }
+        let oids: Vec<String> = blobs.iter().map(|(_, o)| o.clone()).collect();
+        self.prefetch(dir, auth, &oids).await?;
+        let sizes = self.sizes(dir, &oids).await?;
+        let mut total: u64 = 0;
+        let mut read: Vec<(usize, String)> = Vec::new();
+        for ((i, oid), size) in blobs.into_iter().zip(sizes) {
+            files[i].size = size;
+            if size <= limits.max_file_bytes && total + size <= limits.max_source_bytes {
+                total += size;
+                read.push((i, oid));
+            }
+        }
+        if !read.is_empty() {
+            let contents = self
                 .cat_blobs(
                     dir,
                     auth,
-                    &wanted.iter().map(|(_, o)| o.clone()).collect::<Vec<_>>(),
+                    &read.iter().map(|(_, o)| o.clone()).collect::<Vec<_>>(),
                 )
                 .await?;
-            for ((i, _), b) in wanted.into_iter().zip(blobs) {
+            for ((i, _), b) in read.into_iter().zip(contents) {
                 files[i].size = b.len() as u64;
                 files[i].contents = Some(b);
             }
         }
         Ok(files)
+    }
+
+    /// Fetch the given blobs from the promisor remote in one request (those
+    /// already present are skipped by git).
+    async fn prefetch(&self, dir: &Path, auth: &Auth, oids: &[String]) -> Result<(), GitError> {
+        let mut c = self.cmd(Some(dir), auth);
+        c.args([
+            "fetch",
+            "--quiet",
+            "--no-tags",
+            "--no-write-fetch-head",
+            "--filter=blob:none",
+            "--stdin",
+            "origin",
+        ])
+        .stdin(Stdio::piped());
+        let mut child = c.spawn().map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                GitError::Missing(e.to_string())
+            } else {
+                GitError::Io(e)
+            }
+        })?;
+        if let Some(mut stdin) = child.stdin.take() {
+            let input: String = oids.iter().map(|o| format!("{o}\n")).collect();
+            stdin.write_all(input.as_bytes()).await?;
+        }
+        let out = match tokio::time::timeout(self.timeout, child.wait_with_output()).await {
+            Err(_) => {
+                return Err(GitError::Timeout {
+                    what: "fetch".into(),
+                    secs: self.timeout.as_secs(),
+                });
+            }
+            Ok(r) => r?,
+        };
+        if !out.status.success() {
+            return Err(GitError::Failed {
+                what: "fetch (blobs)".into(),
+                message: redact(String::from_utf8_lossy(&out.stderr).trim()),
+            });
+        }
+        Ok(())
+    }
+
+    /// Sizes of objects already in the mirror, in order.
+    async fn sizes(&self, dir: &Path, oids: &[String]) -> Result<Vec<u64>, GitError> {
+        let mut c = self.cmd(Some(dir), &Auth::None);
+        // No lazy fetching here: everything was prefetched.
+        c.env("GIT_NO_LAZY_FETCH", "1")
+            .args(["cat-file", "--batch-check=%(objectsize)"])
+            .stdin(Stdio::piped());
+        let mut child = c.spawn()?;
+        if let Some(mut stdin) = child.stdin.take() {
+            let input: String = oids.iter().map(|o| format!("{o}\n")).collect();
+            stdin.write_all(input.as_bytes()).await?;
+        }
+        let out = child.wait_with_output().await?;
+        let text = String::from_utf8_lossy(&out.stdout);
+        let sizes: Vec<u64> = text
+            .lines()
+            .map(|l| l.trim().parse().unwrap_or(u64::MAX))
+            .collect();
+        if sizes.len() != oids.len() {
+            return Err(GitError::Failed {
+                what: "cat-file --batch-check".into(),
+                message: "missing objects after the fetch".into(),
+            });
+        }
+        Ok(sizes)
     }
 
     /// Read blobs with one `cat-file --batch` (lazy-fetched from the promisor remote).

@@ -139,6 +139,12 @@ impl AppTokens {
         })
     }
 
+    /// Forget the cached token of `owner` (after git refused it: revoked, or
+    /// the installation changed).
+    pub async fn invalidate(&self, owner: &str) {
+        self.cache.lock().await.remove(owner);
+    }
+
     /// An installation token for the owner of `owner/repo`, from the cache
     /// while it has more than 5 minutes left.
     pub async fn token_for(&self, owner: &str, repo: &str) -> Result<String, AppError> {

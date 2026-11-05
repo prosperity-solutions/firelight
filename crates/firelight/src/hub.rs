@@ -5,8 +5,12 @@
 //! the first pull finishes); then every source is polled. A pull that passes
 //! replaces the served snapshot; one that fails keeps the last good one and
 //! records why. Webhooks only make a poll happen sooner.
+//!
+//! Concurrency: one pull per source at a time (a per-source lock), and one
+//! catalog rebuild at a time (read, build and swap under one lock), so a slow
+//! rebuild can never overwrite a newer catalog.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 
@@ -40,11 +44,19 @@ pub struct Served {
 pub struct Hub {
     specs: Vec<SourceSpec>,
     puller: Puller,
-    store: Mutex<Store>,
+    store: Arc<Mutex<Store>>,
     limits: Limits,
     self_docs: bool,
     served: RwLock<BTreeMap<String, Served>>,
     catalog: RwLock<Arc<Catalog>>,
+    /// Held across a whole rebuild: read served, build, swap.
+    rebuild_lock: Mutex<()>,
+    /// One pull per source at a time.
+    pull_locks: BTreeMap<String, Arc<tokio::sync::Mutex<()>>>,
+    /// Sources this process has judged at least once. Until then a pull reads
+    /// fully, so a commit rejected by an older binary or older limits is judged
+    /// again after an upgrade.
+    judged: Mutex<BTreeSet<String>>,
     /// Bumped on every catalog rebuild.
     generation: std::sync::atomic::AtomicU64,
 }
@@ -57,14 +69,21 @@ impl Hub {
         limits: Limits,
         self_docs: bool,
     ) -> Arc<Hub> {
+        let pull_locks = specs
+            .iter()
+            .map(|s| (s.id.clone(), Arc::new(tokio::sync::Mutex::new(()))))
+            .collect();
         Arc::new(Hub {
             specs,
             puller,
-            store: Mutex::new(store),
+            store: Arc::new(Mutex::new(store)),
             limits,
             self_docs,
             served: RwLock::new(BTreeMap::new()),
             catalog: RwLock::new(Arc::new(Catalog::default())),
+            rebuild_lock: Mutex::new(()),
+            pull_locks,
+            judged: Mutex::new(BTreeSet::new()),
             generation: std::sync::atomic::AtomicU64::new(0),
         })
     }
@@ -89,6 +108,18 @@ impl Hub {
             .ok()
             .and_then(|s| s.source_states().ok())
             .unwrap_or_default()
+    }
+
+    /// Run a store operation off the async workers (rusqlite is blocking).
+    async fn with_store<T: Send + 'static>(
+        &self,
+        f: impl FnOnce(&mut Store) -> T + Send + 'static,
+    ) -> Option<T> {
+        let store = self.store.clone();
+        tokio::task::spawn_blocking(move || store.lock().ok().map(|mut s| f(&mut s)))
+            .await
+            .ok()
+            .flatten()
     }
 
     /// Load cached snapshots. Returns true when every source had one, so the
@@ -118,7 +149,7 @@ impl Hub {
                                     },
                                 );
                             }
-                            // Cached by an older binary with other rules: pull it again.
+                            // Cached under other rules (an upgrade): pull it again.
                             _ => all = false,
                         }
                     }
@@ -139,6 +170,7 @@ impl Hub {
 
     /// Rebuild the catalog from what every source serves (and the self-docs).
     pub fn rebuild(&self) {
+        let _one_at_a_time = self.rebuild_lock.lock();
         let served = self.served.read().map(|s| s.clone()).unwrap_or_default();
         let mut repos = Vec::new();
         // The self-docs first, unless a dir source declares `firelight` (§5.4).
@@ -175,50 +207,70 @@ impl Hub {
         let Some(spec) = self.specs.iter().find(|s| s.id == id) else {
             return false;
         };
-        let last_seen = self
+        let Some(lock) = self.pull_locks.get(id) else {
+            return false;
+        };
+        let _one_pull = lock.lock().await;
+
+        let previous = self
             .source_states()
             .into_iter()
             .find(|s| s.source_id == id)
-            .and_then(|s| s.newest_commit);
-        // Nothing served yet (a cold start or a lost cache): read fully.
-        let have = self
-            .served
-            .read()
-            .map(|s| s.contains_key(id))
-            .unwrap_or(false);
-        let last_seen = if have { last_seen } else { None };
+            .unwrap_or_default();
+        // Skip unchanged remotes only for commits this process judged itself.
+        let judged = self.judged.lock().map(|j| j.contains(id)).unwrap_or(false);
+        let last_seen = if judged {
+            previous.newest_commit.clone()
+        } else {
+            None
+        };
         let started = Instant::now();
         let result = self.puller.pull(spec, last_seen.as_deref()).await;
         let ms = i64::try_from(started.elapsed().as_millis()).unwrap_or(i64::MAX);
         let now = firelight_source::format_rfc3339(self.puller.clock.now_unix());
+        // By default nothing about the newest commit changes.
         let mut state = SourceState {
             source_id: id.to_string(),
             last_pull_at: Some(now),
             last_pull_ms: Some(ms),
-            newest_commit: last_seen.clone(),
+            newest_commit: previous.newest_commit.clone(),
+            newest_diagnostics: previous.newest_diagnostics.clone(),
             ..Default::default()
         };
         let mut changed = false;
         match result {
-            Ok(Pulled::Unchanged) => {
-                // Keep the newest commit's diagnostics as they were.
-                state.newest_diagnostics = self
-                    .source_states()
-                    .into_iter()
-                    .find(|s| s.source_id == id)
-                    .and_then(|s| s.newest_diagnostics);
-            }
+            Ok(Pulled::Unchanged) => {}
             Ok(Pulled::Good {
                 snapshot,
                 repo,
                 diagnostics,
             }) => {
-                tracing::info!(source = %id, commit = %snapshot.commit, ms, "pulled a new commit");
-                state.newest_commit = Some(snapshot.commit.clone());
-                if let Ok(mut store) = self.store.lock()
-                    && let Err(e) = store.save_snapshot(id, &snapshot)
+                let id_owned = id.to_string();
+                let snap = snapshot.clone();
+                match self
+                    .with_store(move |s| s.save_snapshot(&id_owned, &snap))
+                    .await
                 {
-                    tracing::warn!(source = %id, error = %e, "cannot cache the snapshot; serving it anyway");
+                    Some(Ok(())) => {
+                        // Only a cached commit counts as seen: a restart must
+                        // not skip a commit the cache doesn't hold.
+                        state.newest_commit = Some(snapshot.commit.clone());
+                        state.newest_diagnostics = None;
+                    }
+                    Some(Err(e)) => {
+                        tracing::warn!(source = %id, error = %e, "cannot cache the snapshot; serving it anyway")
+                    }
+                    None => {
+                        tracing::warn!(source = %id, "cannot cache the snapshot; serving it anyway")
+                    }
+                }
+                let same = self
+                    .served
+                    .read()
+                    .map(|s| s.get(id).is_some_and(|x| x.commit == snapshot.commit))
+                    .unwrap_or(false);
+                if !same {
+                    tracing::info!(source = %id, commit = %snapshot.commit, ms, "pulled a new commit");
                 }
                 if let Ok(mut s) = self.served.write() {
                     s.insert(
@@ -231,7 +283,9 @@ impl Hub {
                         },
                     );
                 }
-                changed = true;
+                // Re-reading the served commit (after a restart) changes nothing.
+                changed = !same;
+                self.mark_judged(id);
             }
             Ok(Pulled::Bad {
                 commit,
@@ -241,15 +295,15 @@ impl Hub {
                 tracing::warn!(source = %id, %commit, errors, "the newest commit fails validation; keeping the last good one");
                 state.newest_commit = Some(commit);
                 state.newest_diagnostics = Some(diagnostics_json(&diagnostics));
+                self.mark_judged(id);
             }
             Err(e) => {
                 tracing::warn!(source = %id, error = %e, ms, "pull failed");
                 state.last_pull_error = Some(e.to_string());
             }
         }
-        if let Ok(mut store) = self.store.lock()
-            && let Err(e) = store.record_pull(&state)
-        {
+        let st = state.clone();
+        if let Some(Err(e)) = self.with_store(move |s| s.record_pull(&st)).await {
             tracing::warn!(source = %id, error = %e, "cannot record the pull");
         }
         if changed {
@@ -258,35 +312,54 @@ impl Hub {
         changed
     }
 
+    fn mark_judged(&self, id: &str) {
+        if let Ok(mut j) = self.judged.lock() {
+            j.insert(id.to_string());
+        }
+    }
+
     /// Poll every source every `interval`, and at once when `wake` names it.
-    /// `on_first_round` runs after every source was tried once.
+    /// `on_first_round` runs after every source was tried once. Each pull is
+    /// its own task, so one slow source never holds up the others.
     pub async fn run(
         self: Arc<Self>,
         interval: Duration,
         mut wake: mpsc::Receiver<String>,
         on_first_round: impl FnOnce() + Send + 'static,
     ) {
-        let mut first = Some(on_first_round);
+        let first_round: Vec<_> = self
+            .specs
+            .iter()
+            .map(|s| {
+                let me = self.clone();
+                let id = s.id.clone();
+                tokio::spawn(async move { me.pull(&id).await })
+            })
+            .collect();
+        tokio::spawn(async move {
+            for p in first_round {
+                let _ = p.await;
+            }
+            on_first_round();
+        });
         let mut ticker = tokio::time::interval(interval);
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        ticker.tick().await; // the first tick is the round above
         loop {
             tokio::select! {
                 _ = ticker.tick() => {
-                    let pulls = self.specs.iter().map(|s| {
+                    for s in &self.specs {
                         let me = self.clone();
                         let id = s.id.clone();
-                        tokio::spawn(async move { me.pull(&id).await })
-                    }).collect::<Vec<_>>();
-                    for p in pulls {
-                        let _ = p.await;
-                    }
-                    if let Some(f) = first.take() {
-                        f();
+                        // A pull still running for this source holds its lock;
+                        // this one waits, then sees an unchanged remote.
+                        tokio::spawn(async move { me.pull(&id).await });
                     }
                 }
                 Some(id) = wake.recv() => {
                     tracing::info!(source = %id, "webhook: pulling now");
-                    self.pull(&id).await;
+                    let me = self.clone();
+                    tokio::spawn(async move { me.pull(&id).await });
                 }
             }
         }

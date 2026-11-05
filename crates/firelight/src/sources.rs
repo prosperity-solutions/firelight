@@ -71,7 +71,10 @@ pub fn specs(cfg: &Config, app: Option<Arc<AppTokens>>) -> Vec<SourceSpec> {
 }
 
 pub async fn start(cfg: &Config) -> anyhow::Result<Started> {
-    let git = Git::default();
+    let git = Git {
+        home: cfg.data_dir.join("git-home"),
+        ..Git::default()
+    };
     if cfg.sources.iter().any(|s| s.kind != SourceKind::Dir) {
         let v = git.check_version().await.context("git sources need git")?;
         tracing::info!(git = %v, "git found");

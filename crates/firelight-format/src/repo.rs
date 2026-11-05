@@ -171,7 +171,7 @@ impl Checker {
         for f in files {
             let path = format!("{PREFIX}{}", f.path);
             if f.kind == FileKind::Special {
-                self.err(&path, 0, 0, "special-file", "not a regular file (a FIFO, socket or device); .firelight/ holds plain files only");
+                self.err(&path, 0, 0, "special-file", "not a regular file (a submodule, FIFO, socket or device); .firelight/ holds plain files only");
                 continue;
             }
             let Some(bytes) = &f.contents else {
