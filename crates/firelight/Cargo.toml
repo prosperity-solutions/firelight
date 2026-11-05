@@ -1,0 +1,16 @@
+[package]
+name = "firelight"
+description = "One binary that turns the .firelight/ folders in your git repos into a link page, a help center, search and an MCP server."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "firelight"
+path = "src/main.rs"
+
+[lints]
+workspace = true

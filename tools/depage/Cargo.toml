@@ -1,0 +1,11 @@
+[package]
+name = "depage"
+description = "Dependency-age gate: every crate, toolchain and tool a change adds is at least 7 days old (docs/HANDOVER.md §17.3, D7)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

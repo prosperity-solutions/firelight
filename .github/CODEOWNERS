@@ -1,0 +1,16 @@
+# For visibility only: no ruleset enforces code-owner review (docs/HANDOVER.md
+# §0.1), because GitHub doesn't let an owner approve their own PR.
+/.github/          @peter-adam-dy
+/scripts/          @peter-adam-dy
+/tools/            @peter-adam-dy
+/Cargo.toml        @peter-adam-dy
+/Cargo.lock        @peter-adam-dy
+/AGENTS.md         @peter-adam-dy
+/CLAUDE.md         @peter-adam-dy
+/.claude/          @peter-adam-dy
+/.agents/          @peter-adam-dy
+/site/             @peter-adam-dy
+/README.md         @peter-adam-dy
+/SECURITY.md       @peter-adam-dy
+/LICENSE           @peter-adam-dy
+/NOTICE            @peter-adam-dy

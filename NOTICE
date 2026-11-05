@@ -1,0 +1,27 @@
+Firelight
+Copyright (c) 2026 Prosperity Solutions
+
+The build harness is ported from maintenance-manager
+(https://github.com/prosperity-solutions/maintenance-manager, MIT License,
+Copyright (c) 2026 Prosperity Solutions), commit
+bcf0985284b270fc789d5946c25c6ba76535973d, which in turn ported it from outfit
+(https://github.com/prosperity-solutions/outfit, MIT License) and veld
+(https://github.com/prosperity-solutions/veld, MIT License):
+
+  - the run phases, owner runbook and ship workflow: docs/HANDOVER.md §0, §20–§23
+    and .agents/skills/ship/SKILL.md (also docs/ship.md)
+  - the review method: docs/agentic-review.md
+  - the ship stamp: scripts/dev/prmeta.sh and scripts/ci/ship-gate.sh
+  - the agent guard and its fixtures: scripts/dev/agent-guard.sh,
+    scripts/dev/testdata/guard/
+  - the public-ID check: scripts/dev/public-ids.sh
+  - the owner's repository hardening script under scripts/dev/ (structure)
+  - the `commits`, `ship` and `all-green` jobs in .github/workflows/ci.yml
+  - the dependency-age gate (tools/depage, rewritten in Rust for crates.io)
+  - the structure of AGENTS.md, CLAUDE.md, .claude/agents/, lefthook.yml,
+    .github/dependabot.yml and .github/fresh-deps.txt
+
+Their licence is the MIT License, the same as this project's (see LICENSE).
+
+Further credits (the icon set, the installer's structure from outfit) are added
+here in the PR that brings them in.

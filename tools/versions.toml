@@ -1,0 +1,86 @@
+# Dev and CI tools, pinned (docs/HANDOVER.md §17.3). Run them with
+# scripts/dev/t <name> [args…]; they install into the repo-local .tools/,
+# never globally. Every version is at least 7 days old (tools/depage).
+#
+# A strict flat TOML subset: [name] sections, key = "string" lines.
+#   kind = "cargo"  → cargo install --locked --version <version>
+#   kind = "bin"    → a release download, checked against sha256_<os>_<arch>,
+#                     with `released` (checked against GitHub's release by depage)
+#   url             → {version} is replaced; {asset} is asset_<os>_<arch>
+#   path            → the binary inside the archive ({version} replaced)
+
+[cargo-deny]
+kind = "cargo"
+version = "0.20.2"
+
+[cargo-about]
+kind = "cargo"
+version = "0.9.3"
+
+[just]
+kind = "cargo"
+version = "1.59.0"
+
+[actionlint]
+kind = "bin"
+version = "1.7.12"
+released = "2026-03-30"
+repo = "rhysd/actionlint"
+url = "https://github.com/rhysd/actionlint/releases/download/v{version}/{asset}"
+path = "actionlint"
+asset_linux_amd64 = "actionlint_1.7.12_linux_amd64.tar.gz"
+asset_linux_arm64 = "actionlint_1.7.12_linux_arm64.tar.gz"
+asset_darwin_arm64 = "actionlint_1.7.12_darwin_arm64.tar.gz"
+asset_darwin_amd64 = "actionlint_1.7.12_darwin_amd64.tar.gz"
+sha256_linux_amd64 = "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
+sha256_linux_arm64 = "325e971b6ba9bfa504672e29be93c24981eeb1c07576d730e9f7c8805afff0c6"
+sha256_darwin_arm64 = "aba9ced2dee8d27fecca3dc7feb1a7f9a52caefa1eb46f3271ea66b6e0e6953f"
+sha256_darwin_amd64 = "5b44c3bc2255115c9b69e30efc0fecdf498fdb63c5d58e17084fd5f16324c644"
+
+[shellcheck]
+kind = "bin"
+version = "0.11.0"
+released = "2025-08-04"
+repo = "koalaman/shellcheck"
+url = "https://github.com/koalaman/shellcheck/releases/download/v{version}/{asset}"
+path = "shellcheck-v0.11.0/shellcheck"
+asset_linux_amd64 = "shellcheck-v0.11.0.linux.x86_64.tar.gz"
+asset_linux_arm64 = "shellcheck-v0.11.0.linux.aarch64.tar.gz"
+asset_darwin_arm64 = "shellcheck-v0.11.0.darwin.aarch64.tar.gz"
+asset_darwin_amd64 = "shellcheck-v0.11.0.darwin.x86_64.tar.gz"
+sha256_linux_amd64 = "b7af85e41cc99489dcc21d66c6d5f3685138f06d34651e6d34b42ec6d54fe6f6"
+sha256_linux_arm64 = "68a8133197a50beb8803f8d42f9908d1af1c5540d4bb05fdfca8c1fa47decefc"
+sha256_darwin_arm64 = "339b930feb1ea764467013cc1f72d09cd6b869ebf1013296ba9055ab2ffbd26f"
+sha256_darwin_amd64 = "c2c15e08df0e8fbc374c335b230a7ee958c313fa5714817a59aa59f1aa594f51"
+
+[zizmor]
+kind = "bin"
+version = "1.31.1"
+released = "2026-10-15"
+repo = "zizmorcore/zizmor"
+url = "https://github.com/zizmorcore/zizmor/releases/download/v{version}/{asset}"
+path = "zizmor"
+asset_linux_amd64 = "zizmor-x86_64-unknown-linux-gnu.tar.gz"
+asset_linux_arm64 = "zizmor-aarch64-unknown-linux-gnu.tar.gz"
+asset_darwin_arm64 = "zizmor-aarch64-apple-darwin.tar.gz"
+asset_darwin_amd64 = "zizmor-x86_64-apple-darwin.tar.gz"
+sha256_linux_amd64 = "d185f726bdaf92df78273217dfdd24ebcd6b0ef48cf3ce776ff5762b6e138c99"
+sha256_linux_arm64 = "37eebbd5762a44f262d94875431b14a6d2402991e90a685113ea97b8b41be833"
+sha256_darwin_arm64 = "ad5aa633cd56215b11e6c51d51f90c7e6b22904a75047d1215abbd422f61d698"
+sha256_darwin_amd64 = "72ae63bb85b67229c06242f04195cb43927e9fab5f43803c6434dc701a517d61"
+
+[lefthook]
+kind = "bin"
+version = "2.2.2"
+released = "2026-10-13"
+repo = "evilmartians/lefthook"
+url = "https://github.com/evilmartians/lefthook/releases/download/v{version}/{asset}"
+path = ""
+asset_linux_amd64 = "lefthook_2.2.2_Linux_x86_64"
+asset_linux_arm64 = "lefthook_2.2.2_Linux_arm64"
+asset_darwin_arm64 = "lefthook_2.2.2_MacOS_arm64"
+asset_darwin_amd64 = "lefthook_2.2.2_MacOS_x86_64"
+sha256_linux_amd64 = "4fbf89eb7748c6aed84d833ee1a29edac48fae614468ca9a82896ec32f2800b6"
+sha256_linux_arm64 = "a4d4bf78d902af1a148bf0662af08e13b791061e46e6e2183b0660eed96b43f6"
+sha256_darwin_arm64 = "049c648578c056a180519c4d8c31d5436dbb9df74369b2e29611aae99d7e9b36"
+sha256_darwin_amd64 = "b02f6ee5e87b54de138ea532dfdb42c4b88400b5f8cfab0900e5155fc81c1713"

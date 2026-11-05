@@ -1,0 +1,94 @@
+#!/bin/sh
+# Run a pinned tool: scripts/dev/t <name> [args…]   (docs/HANDOVER.md §17.3)
+#
+# Versions, download URLs and checksums live in tools/versions.toml. Tools
+# install once into the repo-local .tools/ (gitignored), never globally:
+#   kind = "cargo"  cargo install --locked --version <v> --root .tools/<name>-<v>
+#   kind = "bin"    a release download, refused unless its sha256 matches
+# POSIX sh; works with macOS's BSD userland. Needs curl, tar, and shasum or
+# sha256sum.
+set -eu
+
+[ $# -ge 1 ] || { echo "usage: scripts/dev/t <tool> [args…]" >&2; exit 2; }
+name=$1
+shift
+root=$(cd "$(dirname "$0")/../.." && pwd)
+versions=$root/tools/versions.toml
+
+# get <key>: the value of <key> in [name], or empty.
+get() {
+  awk -v sec="[$name]" -v key="$1" '
+    /^[[:space:]]*\[/ { on = ($0 == sec); next }
+    on && $0 ~ "^"key"[[:space:]]*=" {
+      sub(/^[^=]*=[[:space:]]*"/, ""); sub(/"[[:space:]]*$/, ""); print; exit
+    }' "$versions"
+}
+
+kind=$(get kind)
+version=$(get version)
+if [ -z "$kind" ] || [ -z "$version" ]; then
+  echo "scripts/dev/t: no tool [$name] in tools/versions.toml" >&2
+  exit 2
+fi
+dir=$root/.tools/$name-$version
+
+case $kind in
+  cargo)
+    bin=$dir/bin/$name
+    if [ ! -x "$bin" ]; then
+      echo "scripts/dev/t: installing $name $version into .tools/ (once)" >&2
+      cargo install --locked --quiet --version "$version" --root "$dir" "$name" >&2
+    fi
+    exec "$bin" "$@"
+    ;;
+  bin) ;;
+  *)
+    echo "scripts/dev/t: [$name] has unknown kind '$kind'" >&2
+    exit 2
+    ;;
+esac
+
+case $(uname -s) in
+  Linux) os=linux ;;
+  Darwin) os=darwin ;;
+  *) echo "scripts/dev/t: unsupported OS $(uname -s)" >&2; exit 2 ;;
+esac
+case $(uname -m) in
+  x86_64 | amd64) arch=amd64 ;;
+  arm64 | aarch64) arch=arm64 ;;
+  *) echo "scripts/dev/t: unsupported CPU $(uname -m)" >&2; exit 2 ;;
+esac
+bin=$dir/$name
+if [ ! -x "$bin" ]; then
+  asset=$(get "asset_${os}_$arch")
+  want=$(get "sha256_${os}_$arch")
+  if [ -z "$asset" ] || [ -z "$want" ]; then
+    echo "scripts/dev/t: [$name] has no asset or sha256 for ${os}_$arch" >&2
+    exit 2
+  fi
+  url=$(get url | sed -e "s#{version}#$version#g" -e "s#{asset}#$asset#g")
+  inner=$(get path | sed -e "s#{version}#$version#g")
+  tmp=$(mktemp -d)
+  trap 'rm -rf "$tmp"' EXIT
+  echo "scripts/dev/t: downloading $name $version (once)" >&2
+  curl -fsSL --retry 3 -o "$tmp/$asset" "$url"
+  if command -v sha256sum >/dev/null 2>&1; then
+    got=$(sha256sum "$tmp/$asset" | cut -d' ' -f1)
+  else
+    got=$(shasum -a 256 "$tmp/$asset" | cut -d' ' -f1)
+  fi
+  if [ "$got" != "$want" ]; then
+    echo "scripts/dev/t: checksum mismatch for $asset: expected $want, got $got. Refusing it." >&2
+    exit 1
+  fi
+  mkdir -p "$dir"
+  case $asset in
+    *.tar.gz | *.tgz)
+      tar -xzf "$tmp/$asset" -C "$tmp"
+      mv "$tmp/${inner:-$name}" "$bin"
+      ;;
+    *) mv "$tmp/$asset" "$bin" ;;
+  esac
+  chmod 755 "$bin"
+fi
+exec "$bin" "$@"

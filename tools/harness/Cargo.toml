@@ -1,0 +1,15 @@
+[package]
+name = "harness"
+description = "Tests for the repo harness: workflow rules, the agent guard, scripts, Dependabot, public IDs (docs/HANDOVER.md §17.3)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde-saphyr = "=2.0.0"
+serde_json = "1"
+
+[lints]
+workspace = true

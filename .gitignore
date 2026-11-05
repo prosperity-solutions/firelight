@@ -1,0 +1,9 @@
+/target/
+/.tools/
+/dist/
+notes/
+.firelight-ship.json
+.veld-data/
+.claude/worktrees/
+.claude/settings.local.json
+.DS_Store

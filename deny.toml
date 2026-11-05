@@ -1,0 +1,50 @@
+# cargo deny check (docs/HANDOVER.md §17.3, §19). Run: scripts/dev/t cargo-deny --locked check
+
+[graph]
+all-features = true
+
+[advisories]
+# RustSec advisories, unmaintained and unsound notices included, deny.
+version = 2
+yanked = "deny"
+ignore = []
+
+[licenses]
+version = 2
+# Exactly the §19 allow-list. Widening it needs a justification in the PR body.
+allow = [
+  "MIT",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "Zlib",
+  "Unicode-3.0",
+  "CDLA-Permissive-2.0",
+]
+confidence-threshold = 0.93
+unused-allowed-license = "allow"
+private = { ignore = true }
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+deny = [
+  # TLS is rustls with the ring provider (§19): no OpenSSL, no aws-lc.
+  { name = "openssl" },
+  { name = "openssl-sys" },
+  { name = "aws-lc-rs" },
+  { name = "aws-lc-sys" },
+  # Unmaintained YAML crates (D8).
+  { name = "serde_yaml" },
+  { name = "serde_yml" },
+]
+
+[sources]
+# crates.io only: no git or path dependencies outside the workspace.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

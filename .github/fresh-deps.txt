@@ -1,0 +1,7 @@
+# Versions allowed although they are younger than seven days (tools/depage),
+# one per line, each expiring at most 30 days after the change that adds it:
+#
+#   <name> <version> <expires YYYY-MM-DD> <reason: the advisory it fixes>
+#
+# <name> is a crate, `toolchain`, or a tool in tools/versions.toml. An expired
+# line fails CI: remove it once the version is a week old.

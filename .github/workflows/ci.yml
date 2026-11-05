@@ -1,0 +1,290 @@
+name: CI
+
+# The only workflow: CI on pull requests and main, and (from M1) the release on
+# main (docs/HANDOVER.md §15, maintenance-manager §15–§16). Rules this file
+# must keep are asserted by tools/harness (the `workflows` job) and zizmor.
+#
+# Draft PRs run nothing: `gate` skips, every job needs it, and `all-green`
+# fails on purpose so a draft never shows a green required check. A SKIPPED
+# JOB LOOKS GREEN: read the ready run's jobs, never the rollup.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+
+# Nothing by default; every job asks for the least it needs, with a comment.
+permissions: {}
+
+# Runs on main queue one after another, so two releases never interleave. PR
+# runs cancel their predecessors.
+concurrency:
+  group: ${{ github.event_name == 'push' && 'main' || format('ci-{0}', github.event.pull_request.number) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  TZ: UTC
+
+jobs:
+  gate:
+    name: gate
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            *.actions.githubusercontent.com:443
+      - name: Not a draft
+        run: echo "Not a draft, so CI runs."
+
+  commits:
+    name: Conventional Commits
+    needs: gate
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            *.actions.githubusercontent.com:443
+      - name: PR title is a Conventional Commit
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          # Squash merges put only the title on main, and the title decides the
+          # next version, so the title is the one subject that matters.
+          if printf '%s' "$TITLE" | grep -Eq '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9._/-]+\))?!?: [^ ].*$'; then
+            printf '✅ PR title: %s\n' "$TITLE"
+          else
+            printf '❌ PR title is not a Conventional Commit: %s\n' "$TITLE"
+            echo "Expected: type(scope)?!?: description, with type one of feat fix docs style refactor perf test build ci chore revert."
+            echo "Fix: gh pr edit --title 'fix(scope): what changed'"
+            exit 1
+          fi
+      - name: PR title and body hold no real IDs
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          # The same pattern as scripts/dev/public-ids.sh (this job has no
+          # checkout; tools/harness keeps the two equal).
+          hits=$(printf '%s\n%s\n' "$TITLE" "$BODY" |
+            sed -E 's#user-attachments/assets/[0-9A-Fa-f-]{36}##g' |
+            grep -Eo '[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}' |
+            grep -Evc '^0{8}-0{4}-0{4}-0{4}-0{12}$' || true)
+          if [ "${hits:-0}" != 0 ]; then
+            echo "❌ The PR title or body holds $hits real-looking ID(s) (UUIDs). Remove them; examples use 00000000-0000-0000-0000-000000000000 (AGENTS.md, Public text hygiene)."
+            exit 1
+          fi
+          echo "✅ No real IDs in the PR title or body."
+
+  ship:
+    name: Ship Workflow
+    needs: gate
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read # checkout
+      pull-requests: read # read the PR's labels live (the no-ship waiver)
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            *.actions.githubusercontent.com:443
+      # The head commit itself, with history: the default depth-1 merge commit
+      # has neither the trailer nor the base commit's helper.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: The head commit carries a valid ship stamp
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # The gate and the helper both come from the BASE commit, so a PR
+          # cannot neuter them and certify itself.
+          git show "$BASE:scripts/ci/ship-gate.sh" > "$RUNNER_TEMP/ship-gate.sh"
+          sh "$RUNNER_TEMP/ship-gate.sh"
+
+  workflows:
+    name: workflows
+    needs: gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read # checkout
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            static.rust-lang.org:443
+            index.crates.io:443
+            static.crates.io:443
+            *.actions.githubusercontent.com:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Harness tests (workflow rules, guard, scripts, Dependabot, public IDs)
+        run: cargo test --locked -p harness
+      - name: Ship gate selftest
+        run: sh scripts/ci/ship-gate.sh --selftest
+
+  lint:
+    name: lint
+    needs: gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read # checkout
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            release-assets.githubusercontent.com:443
+            objects.githubusercontent.com:443
+            static.rust-lang.org:443
+            index.crates.io:443
+            static.crates.io:443
+            *.actions.githubusercontent.com:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: cargo fmt
+        run: cargo fmt --all --check
+      - name: cargo clippy
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
+      - name: No real IDs in tracked files
+        run: git ls-files -z | xargs -0 sh scripts/dev/public-ids.sh
+      - name: shellcheck
+        run: scripts/dev/t shellcheck -s sh scripts/dev/t scripts/dev/*.sh scripts/ci/*.sh
+      - name: actionlint
+        run: scripts/dev/t actionlint
+      - uses: zizmorcore/zizmor-action@53290badfa369cb0bf7ad16342cb62c2fa47ac7b # v0.8.0
+        with:
+          version: 1.31.1
+          advanced-security: false
+          # Online audits (known-vulnerable actions, impostor commits) on PRs;
+          # main is offline so a GitHub API blip cannot redden it.
+          online-audits: ${{ github.event_name == 'pull_request' }}
+      - name: cargo deny (advisories, licences, bans, sources)
+        run: scripts/dev/t cargo-deny --locked check
+
+  deps:
+    name: deps
+    needs: gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read # checkout
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            static.rust-lang.org:443
+            index.crates.io:443
+            static.crates.io:443
+            *.actions.githubusercontent.com:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Dependency age (depage, 7 days)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          # PRs: what the PR adds, against its head commit's date, and an
+          # unresolvable version fails. main: what the push added, and an
+          # unresolvable version only warns.
+          if [ "$EVENT" = pull_request ]; then
+            cargo run --locked -q -p depage -- --base "$PR_BASE" --head "$PR_HEAD"
+          else
+            base=$PUSH_BEFORE
+            git cat-file -e "$base^{commit}" 2>/dev/null || base=""
+            cargo run --locked -q -p depage -- --base "$base" --head HEAD --warn-unresolved
+          fi
+
+  test:
+    name: test
+    needs: gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read # checkout
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            static.rust-lang.org:443
+            index.crates.io:443
+            static.crates.io:443
+            *.actions.githubusercontent.com:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: cargo test
+        run: cargo test --locked --workspace --exclude harness
+
+  all-green:
+    name: all-green
+    needs: [gate, commits, ship, workflows, lint, deps, test]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            *.actions.githubusercontent.com:443
+      - name: Every needed job succeeded
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          EVENT: ${{ github.event_name }}
+          DRAFT: ${{ github.event.pull_request.draft }}
+        run: |
+          if [ "$EVENT" = pull_request ] && [ "$DRAFT" = true ]; then
+            echo "draft: CI not run. Mark the PR ready (gh pr ready) to run it."
+            exit 1
+          fi
+          bad=$(printf '%s' "$NEEDS" | jq -r --arg ev "$EVENT" '
+            to_entries[]
+            | select(
+                if $ev == "push" and (.key == "commits" or .key == "ship")
+                then .value.result != "skipped"
+                else .value.result != "success" end)
+            | "\(.key): \(.value.result)"')
+          if [ -n "$bad" ]; then
+            printf '❌ not green:\n%s\n' "$bad"
+            exit 1
+          fi
+          echo "✅ all green"

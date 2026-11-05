@@ -1,0 +1,5 @@
+# Pinned to an exact release at least 7 days old (docs/HANDOVER.md §17.3).
+[toolchain]
+channel = "1.99.1"
+components = ["rustfmt", "clippy"]
+profile = "minimal"
