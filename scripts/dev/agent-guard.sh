@@ -62,6 +62,12 @@ if printf '%s' "$cmd" | grep -Eq '(^|[^[:alnum:]_-])push([^[:alnum:]_-]|$)' &&
   printf '%s' "$cmd" | grep -Eiq 'LEFTHOOK=(0|false)|LEFTHOOK_EXCLUDE|hookspath'; then
   block "a push with LEFTHOOK=0, LEFTHOOK_EXCLUDE or core.hooksPath skips the pre-push gate. Fix the pre-pass instead."
 fi
+# The owner's settings script piped or fed into a shell (`echo … | sh`,
+# `… | xargs bash`): the per-segment check below can't see across the pipe.
+if printf '%s' "$cmd" | grep -q 'harden-public-repo\.sh' &&
+  printf '%s\n' "$segments" | grep -Eq '^([^[:space:]]*/)?(sh|bash|zsh|dash|ksh|fish|xargs|source|\.)([[:space:]]|$)'; then
+  block "scripts/dev/harden-public-repo.sh changes repository settings. Only the owner runs it, in their own terminal."
+fi
 # A substitution or backtick in a command that runs git push: only when git and
 # push really belong together (not `gh run list --event push`). Matched on the
 # whole text with quotes and backslashes dropped and each $(...) or `...`
@@ -78,8 +84,12 @@ fi
 #   BLOCK <reason>    block now
 #   CURRENT <dir>     a push of the current branch of <dir>: checked below
 #   PR <arg>          a checkout of PR <arg>: its author is checked below
+# The awk program below is single-quoted: never put an apostrophe in it, not
+# even in a comment, or this guard stops parsing and (failing closed) blocks
+# every command. tools/harness runs `sh -n` on it.
 verdicts=$(printf '%s\n' "$segments" | awk -v boot="$bootstrap_done" '
 function base(s) { sub(/.*\//, "", s); return s }
+function runner(c) { return c ~ /^(sh|bash|zsh|dash|ksh|fish|source|\.|xargs|python|python3|perl|ruby|node|osascript|script)$/ }
 function reader(c) { return c ~ /^(cat|less|more|head|tail|sed|awk|grep|egrep|rg|wc|shellcheck|diff|stat|ls|file|vi|vim|nvim|nano|code|open|bat|git|veld)$/ }
 function out(s) { print s; done = 1 }
 
@@ -189,8 +199,12 @@ function do_gh(i,    s, j, a, k, c, v, method, body, ep, settings) {
 {
   n = split($0, t, /[[:space:]]+/)
   done = 0
-  for (i = 1; i <= n; i++) {
-    if (base(t[i]) == "harden-public-repo.sh" && !(i > 1 && reader(base(t[1])))) {
+  # The owner settings script: blocked when it would run (as the command, or
+  # handed to a shell or interpreter), not when text merely mentions it (a
+  # commit message, a heredoc line, a file being edited).
+  for (c = 1; c <= n && (t[c] ~ /^-/ || base(t[c]) ~ /^(env|nice|nohup|time|command|exec|sudo)$/); c++) {}
+  for (i = c; i <= n; i++) {
+    if (t[i] ~ /harden-public-repo\.sh/ && (i == c || runner(base(t[c])))) {
       out("BLOCK scripts/dev/harden-public-repo.sh changes repository settings. Only the owner runs it, in their own terminal.")
       break
     }

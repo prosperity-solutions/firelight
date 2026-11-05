@@ -163,3 +163,20 @@ fn settings_wire_the_guard_fail_closed() {
         assert!(deny.contains(&d), "settings.json deny is missing {d}");
     }
 }
+
+/// The guard fails closed: if it doesn't parse, every Bash call is blocked.
+/// (An apostrophe in a comment inside its single-quoted awk program did that
+/// once.)
+#[test]
+fn guard_parses() {
+    let out = std::process::Command::new("sh")
+        .arg("-n")
+        .arg(harness::root().join("scripts/dev/agent-guard.sh"))
+        .output()
+        .unwrap_or_else(|e| panic!("{e}"));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}

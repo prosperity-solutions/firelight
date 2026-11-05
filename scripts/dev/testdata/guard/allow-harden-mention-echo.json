@@ -1,0 +1,11 @@
+{
+  "expect": "allow",
+  "bootstrap_done": true,
+  "branch": "ci/x",
+  "payload": {
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "echo 'Owner: run sh scripts/dev/harden-public-repo.sh in your terminal' > notes/todo.txt"
+    }
+  }
+}

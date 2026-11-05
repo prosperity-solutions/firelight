@@ -1,0 +1,11 @@
+{
+  "expect": "allow",
+  "bootstrap_done": true,
+  "branch": "ci/x",
+  "payload": {
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "python3 -I - <<'PY'\np='notes/progress.md'; s=open(p).read()\ns=s.replace('x', 'the owner re-runs sh scripts/dev/harden-public-repo.sh once')\nopen(p,'w').write(s)\nPY"
+    }
+  }
+}
