@@ -585,7 +585,8 @@ jobs:
           git -C "$r" commit -qam "a covered path changes"
           echo "FIXTURE=$r" >> "$GITHUB_ENV"
       - name: Run the action
-        uses: ./action
+        # The action at this very commit, on purpose (§12.3).
+        uses: ./action # zizmor: ignore[self-repository]
         with:
           version: v0.0.0
           binary: target/debug/firelight

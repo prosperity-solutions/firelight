@@ -102,7 +102,7 @@ fn every_uses_is_pinned_and_allowed() {
         };
         n += 1;
         // This repo's own action, tested on the code under review (§12.3).
-        if rest.trim() == "./action" {
+        if rest.split(" # ").next().unwrap_or("").trim() == "./action" {
             continue;
         }
         let (spec, comment) = rest.split_once(" # ").unwrap_or((rest, ""));

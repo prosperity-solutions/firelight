@@ -19,7 +19,7 @@ docker run -d --name firelight -p 127.0.0.1:8080:8080 \
   -e FIRELIGHT_AUTH_UI=none -e FIRELIGHT_AUTH_MCP=none \
   -e FIRELIGHT_EMBEDDER=off \
   ghcr.io/prosperity-solutions/firelight:latest
-curl -fsS --retry 30 --retry-connrefused --retry-delay 1 http://127.0.0.1:8080/readyz
+curl -fsS --retry 60 --retry-all-errors --retry-delay 1 http://127.0.0.1:8080/readyz
 curl -fsS http://127.0.0.1:8080/api/v1/repos | grep -q acme-infra
 docker rm -f firelight
 ```

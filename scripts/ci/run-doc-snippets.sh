@@ -51,7 +51,7 @@ printf '%s\n' "$docker_cmd" | sed -e "s#^docker run --rm #docker run -d --rm --n
   -e "s#ghcr.io/prosperity-solutions/firelight:latest#$image#g" > "$work/site-docker.sh"
 cat >> "$work/site-docker.sh" <<'SH'
 trap 'docker rm -f firelight-site >/dev/null 2>&1' EXIT
-curl -fsS --retry 60 --retry-connrefused --retry-delay 1 http://127.0.0.1:8080/readyz
+curl -fsS --retry 60 --retry-all-errors --retry-delay 1 http://127.0.0.1:8080/readyz
 SH
 printf '%s > /dev/null\n' "$helm_cmd" | sed -e "s#^helm install #helm template #" \
   -e "s#oci://ghcr.io/prosperity-solutions/charts/firelight#$chart#g" > "$work/site-helm.sh"
