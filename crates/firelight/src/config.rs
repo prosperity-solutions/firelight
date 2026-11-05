@@ -119,7 +119,7 @@ pub static KEYS: &[Key] = &[
         kind: Kind::Sources,
         default: Some("[]"),
         secret: false,
-        doc: "The repos and folders to read, as `[[sources]]` tables (`id`, `kind` = `github` | `git` | `dir`, `url` or `path`, optional `ref`, `token_file`, `token_auth` = `bearer` | `basic`). In the env var: a JSON array of the same objects.",
+        doc: "The repos and folders to read, as `[[sources]]` tables (`id`, `kind` = `github` | `git` | `dir`, `url` or `path`, optional `ref`, `token_file`, `token_auth` = `bearer` | `basic`). `git` URLs are `https://`, `http://` or a local `file://`; `github` URLs are `https://github.com/<owner>/<repo>` (with a GitHub App, a token, or anonymous for public repos). In the env var: a JSON array of the same objects.",
     },
     Key {
         path: "poll.interval",
@@ -1241,6 +1241,18 @@ impl Builder<'_> {
                     ),
                 },
                 _ => match s("url") {
+                    // A local repo over file:// (tests, preview, the Veld
+                    // `serve` variant); git sources only.
+                    Some(u) if kind == SourceKind::Git && u.starts_with("file://") => {
+                        match url::Url::parse(&u) {
+                            Ok(parsed) => url = Some(parsed),
+                            Err(e) => self.bad(
+                                &format!("{key}.url"),
+                                o.clone(),
+                                format!("{u:?} is not a file:// URL ({e})."),
+                            ),
+                        }
+                    }
                     Some(u) => match check_url(&u) {
                         Ok(parsed) => {
                             if kind == SourceKind::Github && parsed.host_str() != Some("github.com")

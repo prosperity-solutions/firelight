@@ -1,0 +1,6 @@
+format: 1
+id: firelight
+name: Firelight
+summary: The docs your repos write about themselves, as a link page, a help center, search and an MCP server.
+owner: Firelight maintainers
+spaces: [firelight]

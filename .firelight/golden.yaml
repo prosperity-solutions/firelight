@@ -1,0 +1,6 @@
+format: 1
+questions:
+  - query: how do I validate my firelight folder
+    expect: [check-a-repo]
+  - query: what is the .firelight folder
+    expect: [firelight-folder]

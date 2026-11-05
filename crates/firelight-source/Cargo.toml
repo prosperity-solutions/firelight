@@ -10,7 +10,23 @@ publish.workspace = true
 
 [dependencies]
 firelight-format = { path = "../firelight-format" }
+firelight-store = { path = "../firelight-store" }
+base64 = "0.22"
+hmac = "0.12"
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "json", "http2"] }
+ring = "0.17"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
 thiserror = "2"
+tokio = { version = "1", features = ["process", "time", "io-util", "rt", "macros", "sync"] }
+tracing = "0.1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["process", "time", "io-util", "rt-multi-thread", "macros", "sync", "net"] }
+wiremock = "0.6"
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
 
 [lints]
 workspace = true

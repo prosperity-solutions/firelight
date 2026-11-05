@@ -12,6 +12,7 @@ publish.workspace = true
 firelight-format = { path = "../firelight-format" }
 firelight-server = { path = "../firelight-server" }
 firelight-source = { path = "../firelight-source" }
+firelight-store = { path = "../firelight-store" }
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }

@@ -13,7 +13,7 @@ Firelight refuses to start when anything is wrong, lists every problem at once w
 | `server.allowed_hosts` | `FIRELIGHT_SERVER_ALLOWED_HOSTS` | `[]` | More `Host` header values to accept, e.g. the in-cluster Service name for agents running in the cluster. |
 | `server.allowed_origins` | `FIRELIGHT_SERVER_ALLOWED_ORIGINS` | `[]` | Browser origins allowed to call `/mcp`. Empty means the origin of `server.public_url` only. |
 | `data.dir` | `FIRELIGHT_DATA_DIR` | `/var/lib/firelight` | Where the database cache, the git clones and the models live. Deleting it loses nothing: git is the truth. |
-| `sources` | `FIRELIGHT_SOURCES` | `[]` | The repos and folders to read, as `[[sources]]` tables (`id`, `kind` = `github` \| `git` \| `dir`, `url` or `path`, optional `ref`, `token_file`, `token_auth` = `bearer` \| `basic`). In the env var: a JSON array of the same objects. |
+| `sources` | `FIRELIGHT_SOURCES` | `[]` | The repos and folders to read, as `[[sources]]` tables (`id`, `kind` = `github` \| `git` \| `dir`, `url` or `path`, optional `ref`, `token_file`, `token_auth` = `bearer` \| `basic`). `git` URLs are `https://`, `http://` or a local `file://`; `github` URLs are `https://github.com/<owner>/<repo>` (with a GitHub App, a token, or anonymous for public repos). In the env var: a JSON array of the same objects. |
 | `poll.interval` | `FIRELIGHT_POLL_INTERVAL` | `120s` | How often to ask each remote for its newest commit. Nothing is fetched when nothing changed. |
 | `webhook.secret` | `FIRELIGHT_WEBHOOK_SECRET` or `FIRELIGHT_WEBHOOK_SECRET_FILE` | — | The GitHub webhook secret. Unset: `/webhook/github` answers 404. |
 | `github_app.id` | `FIRELIGHT_GITHUB_APP_ID` | — | GitHub App id, for `github` sources. Needs only *Contents: read* and *Metadata: read*. |

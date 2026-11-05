@@ -35,7 +35,7 @@ impl Default for Limits {
 }
 
 /// One file of a `.firelight/` folder.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InputFile {
     /// Relative to `.firelight/`, with `/` separators, e.g. `guides/x.md`.
     pub path: String,
