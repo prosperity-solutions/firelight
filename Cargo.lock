@@ -875,7 +875,7 @@ name = "firelight-server"
 version = "0.0.0"
 dependencies = [
  "axum",
- "base64 0.22.1",
+ "base64 0.23.1",
  "firelight-format",
  "firelight-search",
  "firelight-source",
@@ -901,7 +901,7 @@ name = "firelight-source"
 version = "0.0.0"
 dependencies = [
  "axum",
- "base64 0.22.1",
+ "base64 0.23.1",
  "firelight-format",
  "firelight-store",
  "hmac",
