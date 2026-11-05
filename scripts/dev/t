@@ -67,7 +67,7 @@ if [ ! -x "$bin" ]; then
     exit 2
   fi
   url=$(get url | sed -e "s#{version}#$version#g" -e "s#{asset}#$asset#g")
-  inner=$(get path | sed -e "s#{version}#$version#g")
+  inner=$(get path | sed -e "s#{version}#$version#g" -e "s#{os}#$os#g" -e "s#{arch}#$arch#g")
   tmp=$(mktemp -d)
   trap 'rm -rf "$tmp"' EXIT
   echo "scripts/dev/t: downloading $name $version (once)" >&2

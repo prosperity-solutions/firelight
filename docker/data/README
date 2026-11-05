@@ -1,0 +1,1 @@
+The image copies this folder to /var/lib/firelight, owned by the non-root user.

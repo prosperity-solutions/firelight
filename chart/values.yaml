@@ -1,0 +1,81 @@
+# Firelight Helm values. Only publicUrl is required (and, from a source
+# checkout, image.tag or image.digest).
+
+image:
+  repository: ghcr.io/prosperity-solutions/firelight
+  # Defaults to v<appVersion> of the packaged chart. Required from a source
+  # checkout (appVersion 0.0.0).
+  tag: ""
+  # When set, wins over tag. The release job pins it with sed.
+  digest: ""
+  pullPolicy: IfNotPresent
+
+# REQUIRED. The URL people open, e.g. https://firelight.acme.example.
+# Rendered as server.public_url.
+publicUrl: ""
+
+# Free-form firelight.toml, rendered with toToml into the ConfigMap. The chart
+# sets server.listen, server.public_url and data.dir itself; those win.
+config:
+  # Empty on purpose: the server refuses to start until the operator states
+  # how the UI and the MCP endpoint authenticate. Set both (see the firelight
+  # docs for the accepted values).
+  auth:
+    ui: ""
+    mcp: ""
+  sources: []
+
+# Name of an existing Secret holding credentials. Never put secrets in values.
+existingSecret: ""
+
+# ENV_NAME_FILE: key in existingSecret. The Secret is mounted read-only at
+# /etc/firelight/secrets and each entry becomes the env var
+# ENV_NAME_FILE=/etc/firelight/secrets/<key>. Example:
+#   FIRELIGHT_AUTH_PASSWORD_FILE: password
+secretFiles: {}
+
+# Extra plain (non-secret) environment variables, e.g.
+#   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.acme.example:4318
+env: {}
+
+# The data directory, mounted at /var/lib/firelight. An emptyDir when disabled.
+persistence:
+  enabled: true
+  size: 20Gi
+  storageClass: ""
+  # Use a claim you manage instead of creating one.
+  existingClaim: ""
+  accessModes:
+    - ReadWriteOnce
+
+# Sized for the default embedding model; M8 replaces these with measured numbers (D4)
+resources:
+  requests:
+    cpu: "1"
+    memory: 3Gi
+  limits:
+    memory: 4Gi
+
+service:
+  type: ClusterIP
+  # targetPort is the container port named http (8080).
+  port: 80
+
+# Liveness GET /healthz, readiness GET /readyz, startup GET /healthz. The
+# startup probe allows periodSeconds x failureThreshold = 30 minutes for the
+# first embedding-model download.
+probes:
+  startupProbe:
+    periodSeconds: 10
+    failureThreshold: 180
+  livenessProbe:
+    periodSeconds: 10
+    failureThreshold: 3
+  readinessProbe:
+    periodSeconds: 10
+    failureThreshold: 3
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

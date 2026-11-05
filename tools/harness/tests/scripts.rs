@@ -1,5 +1,17 @@
 //! Scripts: executable bits, the public-ID check, the tool pin file.
 
+/// §0.1: nobody reviews. GitHub's default extra approval for unattributed
+/// changes would block every PR of a sole owner, so the owner's hardening
+/// script states it off.
+#[test]
+fn hardening_keeps_zero_approvals() {
+    let s = read(&format!("scripts/dev/{}-public-repo.sh", "harden"));
+    assert!(s.contains("\"required_approving_review_count\": 0"));
+    assert!(s.contains("\"require_extra_approval_for_unattributed_changes\": false"));
+    assert!(s.contains("\"bypass_actors\": []"));
+    assert!(s.contains("required_signatures"));
+}
+
 use harness::{TempDir, fake_id, read, root};
 use std::io::Write;
 use std::process::{Command, Stdio};
@@ -178,4 +190,172 @@ fn session_start_hook_never_fails() {
         s.contains("Next action: x") && s.contains("nothing") && !s.contains("- M1"),
         "{s}"
     );
+}
+
+fn git(dir: &std::path::Path, args: &[&str]) {
+    let out = harness::hermetic(
+        Command::new("git")
+            .args([
+                "-c",
+                "user.email=t@example.com",
+                "-c",
+                "user.name=t",
+                "-c",
+                "commit.gpgsign=false",
+                "-c",
+                "tag.gpgsign=false",
+            ])
+            .args(args)
+            .current_dir(dir),
+    )
+    .output()
+    .unwrap_or_else(|e| panic!("{e}"));
+    assert!(
+        out.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// D9: the version script, against throwaway histories.
+#[test]
+fn next_version() {
+    let run = |subjects: &[&str], tag_after: Option<(usize, &str)>| -> String {
+        let d = TempDir::new("version");
+        git(d.path(), &["init", "-q", "-b", "main"]);
+        for (i, s) in subjects.iter().enumerate() {
+            let (subject, body) = s.split_once('|').unwrap_or((s, ""));
+            git(
+                d.path(),
+                &["commit", "-q", "--allow-empty", "-m", subject, "-m", body],
+            );
+            if let Some((at, tag)) = tag_after
+                && at == i
+            {
+                git(d.path(), &["tag", tag]);
+            }
+        }
+        let out = harness::hermetic(
+            Command::new("sh")
+                .arg(root().join("scripts/ci/next-version.sh"))
+                .current_dir(d.path()),
+        )
+        .output()
+        .unwrap_or_else(|e| panic!("{e}"));
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout)
+            .replace('\n', " ")
+            .trim()
+            .to_string()
+    };
+    assert_eq!(
+        run(&["chore: bootstrap"], None),
+        "version=0.1.0 released=false"
+    );
+    assert_eq!(
+        run(&["chore: bootstrap", "fix: a"], None),
+        "version=0.1.0 released=true"
+    );
+    assert_eq!(
+        run(&["chore: x", "feat(server): a"], None),
+        "version=0.1.0 released=true"
+    );
+    assert_eq!(
+        run(&["feat: a", "fix: b"], Some((0, "v0.1.0"))),
+        "version=0.1.1 released=true"
+    );
+    assert_eq!(
+        run(&["feat: a", "feat: b", "fix: c"], Some((0, "v0.1.0"))),
+        "version=0.2.0 released=true"
+    );
+    assert_eq!(
+        run(&["feat: a", "docs: b", "ci: c"], Some((0, "v0.1.0"))),
+        "version=0.1.1 released=false"
+    );
+    assert_eq!(
+        run(&["feat: a", "refactor!: b"], Some((0, "v0.3.4"))),
+        "version=0.4.0 released=true"
+    );
+    assert_eq!(
+        run(
+            &["feat: a", "chore: b|BREAKING CHANGE: gone"],
+            Some((0, "v1.2.3"))
+        ),
+        "version=2.0.0 released=true"
+    );
+    assert_eq!(
+        run(&["feat: a", "feat!: b"], Some((0, "v1.2.3"))),
+        "version=2.0.0 released=true"
+    );
+    // A subject that only mentions feat isn't one.
+    assert_eq!(
+        run(
+            &["feat: a", "docs: explain feat: usage"],
+            Some((0, "v0.1.0"))
+        ),
+        "version=0.1.1 released=false"
+    );
+}
+
+/// §17.3: publish and release refuse any archive whose hash differs from its
+/// build job's output, and SHA256SUMS follows from the hashes alone.
+#[test]
+fn release_sums_refuse_tampering() {
+    let d = TempDir::new("sums");
+    let names = ["linux-amd64", "linux-arm64", "macos-arm64", "macos-amd64"];
+    let mut env: Vec<(String, String)> = vec![("VERSION".into(), "1.2.3".into())];
+    for t in names {
+        let f = d.write(&format!("dist/firelight-v1.2.3-{t}.tar.gz"), t);
+        let out = Command::new("sh").arg("-c").arg("if command -v sha256sum >/dev/null; then sha256sum \"$1\"; else shasum -a 256 \"$1\"; fi").arg("sh").arg(&f).output().unwrap_or_else(|e| panic!("{e}"));
+        let sha = String::from_utf8_lossy(&out.stdout)
+            .split_whitespace()
+            .next()
+            .unwrap_or("")
+            .to_string();
+        env.push((format!("SHA_{}", t.replace('-', "_").to_uppercase()), sha));
+    }
+    let run = |env: &[(String, String)]| {
+        let mut c = Command::new("sh");
+        c.arg(root().join("scripts/ci/release-sums.sh"))
+            .current_dir(d.path())
+            .env_remove("GITHUB_OUTPUT");
+        for (k, v) in env {
+            c.env(k, v);
+        }
+        c.output().unwrap_or_else(|e| panic!("{e}"))
+    };
+    let ok = run(&env);
+    assert!(
+        ok.status.success(),
+        "{}",
+        String::from_utf8_lossy(&ok.stderr)
+    );
+    let first = String::from_utf8_lossy(&ok.stdout)
+        .lines()
+        .last()
+        .unwrap_or("")
+        .to_string();
+    assert!(first.starts_with("digest=sha256:"));
+    // Same inputs, same SHA256SUMS digest (publish and release must agree).
+    assert_eq!(
+        String::from_utf8_lossy(&run(&env).stdout)
+            .lines()
+            .last()
+            .unwrap_or(""),
+        first
+    );
+    // A swapped archive is refused.
+    d.write("dist/firelight-v1.2.3-macos-arm64.tar.gz", "evil");
+    let bad = run(&env);
+    assert!(!bad.status.success());
+    assert!(String::from_utf8_lossy(&bad.stderr).contains("Refusing it"));
+    // A missing build output is refused.
+    d.write("dist/firelight-v1.2.3-macos-arm64.tar.gz", "macos-arm64");
+    let mut missing = env.clone();
+    missing.retain(|(k, _)| k != "SHA_LINUX_ARM64");
+    assert!(!run(&missing).status.success());
 }

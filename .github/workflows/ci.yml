@@ -1,12 +1,17 @@
 name: CI
 
-# The only workflow: CI on pull requests and main, and (from M1) the release on
-# main (docs/HANDOVER.md §15, maintenance-manager §15–§16). Rules this file
-# must keep are asserted by tools/harness (the `workflows` job) and zizmor.
+# The only workflow: CI on pull requests and main, and the release on main
+# (docs/HANDOVER.md §15, maintenance-manager §15–§16). Rules this file must
+# keep are asserted by tools/harness (the `workflows` job) and zizmor.
 #
 # Draft PRs run nothing: `gate` skips, every job needs it, and `all-green`
 # fails on purpose so a draft never shows a green required check. A SKIPPED
 # JOB LOOKS GREEN: read the ready run's jobs, never the rollup.
+#
+#   gate ─┬─ commits* ship* workflows lint deps test chart image ─ all-green
+#         │
+#   all-green ─▶ version† ─▶ build-{linux,macos}-{amd64,arm64}† ─▶ publish† ─▶ attest† ─▶ release† ─▶ verify†
+#   * pull_request only   † push to main only
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
@@ -127,7 +132,7 @@ jobs:
     name: workflows
     needs: gate
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     permissions:
       contents: read # checkout
     steps:
@@ -140,13 +145,30 @@ jobs:
             index.crates.io:443
             static.crates.io:443
             *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Harness tests (workflow rules, guard, scripts, Dependabot, public IDs)
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            target
+          key: cargo-workflows-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: cargo-workflows-
+      - name: Harness tests (workflow rules, guard, scripts, crate rules, Dependabot, public IDs)
         run: cargo test --locked -p harness
       - name: Ship gate selftest
         run: sh scripts/ci/ship-gate.sh --selftest
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: github.event_name == 'push'
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            target
+          key: cargo-workflows-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
 
   lint:
     name: lint
@@ -168,28 +190,60 @@ jobs:
             index.crates.io:443
             static.crates.io:443
             *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            target
+            .tools
+          key: cargo-lint-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', 'tools/versions.toml') }}
+          restore-keys: cargo-lint-
       - name: cargo fmt
         run: cargo fmt --all --check
       - name: cargo clippy
         run: cargo clippy --locked --workspace --all-targets -- -D warnings
+      - name: docs/config.md is generated from the config keys
+        run: |
+          cargo run --locked -q --bin firelight -- config reference > "$RUNNER_TEMP/config.md"
+          if ! diff -u docs/config.md "$RUNNER_TEMP/config.md"; then
+            echo "docs/config.md is stale. Run: just schema"
+            exit 1
+          fi
       - name: No real IDs in tracked files
         run: git ls-files -z | xargs -0 sh scripts/dev/public-ids.sh
       - name: shellcheck
-        run: scripts/dev/t shellcheck -s sh scripts/dev/t scripts/dev/*.sh scripts/ci/*.sh
+        run: scripts/dev/t shellcheck -s sh scripts/dev/t scripts/dev/*.sh scripts/ci/*.sh chart/tests/*.sh
       - name: actionlint
         run: scripts/dev/t actionlint
-      - uses: zizmorcore/zizmor-action@53290badfa369cb0bf7ad16342cb62c2fa47ac7b # v0.8.0
-        with:
-          version: 1.31.1
-          advanced-security: false
+      - name: zizmor (the pinned, checksum-verified binary)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+        run: |
           # Online audits (known-vulnerable actions, impostor commits) on PRs;
-          # main is offline so a GitHub API blip cannot redden it.
-          online-audits: ${{ github.event_name == 'pull_request' }}
+          # main is offline so a GitHub API blip cannot redden it. The binary
+          # instead of zizmor-action: the action pip-installs zizmor unpinned.
+          if [ "$EVENT" = pull_request ]; then
+            scripts/dev/t zizmor --gh-token "$GH_TOKEN" .github/workflows
+          else
+            scripts/dev/t zizmor --offline .github/workflows
+          fi
       - name: cargo deny (advisories, licences, bans, sources)
         run: scripts/dev/t cargo-deny --locked check
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: github.event_name == 'push'
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            target
+            .tools
+          key: cargo-lint-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', 'tools/versions.toml') }}
 
   deps:
     name: deps
@@ -248,15 +302,146 @@ jobs:
             index.crates.io:443
             static.crates.io:443
             *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            target
+          key: cargo-test-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: cargo-test-
       - name: cargo test
         run: cargo test --locked --workspace --exclude harness
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: github.event_name == 'push'
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            target
+          key: cargo-test-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+
+  chart:
+    name: chart
+    needs: gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read # checkout
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            get.helm.sh:443
+            *.actions.githubusercontent.com:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: helm lint, render tests, and the release pin rehearsal
+        run: sh chart/tests/render.sh
+
+  image:
+    name: image
+    needs: gate
+    # 22.04: the binary links against glibc 2.35, which the distroless base
+    # (Debian 12, glibc 2.36) and older Linux hosts both have.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    permissions:
+      contents: read # checkout
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            static.rust-lang.org:443
+            index.crates.io:443
+            static.crates.io:443
+            gcr.io:443
+            storage.googleapis.com:443
+            github.com:443
+            release-assets.githubusercontent.com:443
+            objects.githubusercontent.com:443
+            mirror.gcr.io:443
+            *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            target
+          key: cargo-image-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: cargo-image-
+      - name: Build the release binary
+        run: cargo build --locked --release --bin firelight
+      - name: Build the image and drive it (the release Dockerfile, one platform, not pushed)
+        run: |
+          mkdir -p dist
+          cp target/release/firelight dist/firelight-linux-amd64
+          docker build --platform linux/amd64 -t firelight:ci .
+          # A misconfigured start refuses with exit 2 and lists the problems.
+          set +e
+          docker run --rm firelight:ci > "$RUNNER_TEMP/refusal.txt" 2>&1
+          code=$?
+          set -e
+          cat "$RUNNER_TEMP/refusal.txt"
+          [ "$code" = 2 ] || { echo "expected exit 2 without config, got $code"; exit 1; }
+          grep -q 'Pick an auth mode' "$RUNNER_TEMP/refusal.txt"
+          # A configured start serves health and readiness, as non-root, on a
+          # read-only root filesystem.
+          docker run -d --name fl --read-only -p 127.0.0.1:8080:8080 \
+            -e FIRELIGHT_SERVER_PUBLIC_URL=http://localhost:8080 \
+            -e FIRELIGHT_AUTH_UI=none -e FIRELIGHT_AUTH_MCP=none firelight:ci
+          ok=""
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/readyz; then ok=1; break; fi
+            sleep 1
+          done
+          docker logs fl
+          [ -n "$ok" ] || { echo "the container never became ready"; exit 1; }
+          curl -fsS http://127.0.0.1:8080/healthz
+          [ "$(docker inspect -f '{{.Config.User}}' firelight:ci)" = 65532:65532 ]
+          docker run --rm firelight:ci version
+          docker rm -f fl
+      - name: Rehearse the release's two-platform build (pinned buildx and BuildKit, not pushed)
+        run: |
+          # The same builder publish uses. The amd64 binary stands in for arm64:
+          # the Dockerfile has no RUN, so this checks the build, not the binary.
+          cp dist/firelight-linux-amd64 dist/firelight-linux-arm64
+          mkdir -p ~/.docker/cli-plugins
+          scripts/dev/t buildx version
+          cp .tools/buildx-*/buildx ~/.docker/cli-plugins/docker-buildx
+          docker buildx create --use --name fl \
+            --driver-opt image=mirror.gcr.io/moby/buildkit@sha256:99368f3e46177c6405b9740e4461d91cee004128daeecca78d4ceac50ec1da5c
+          # The pinned base must be a multi-platform index, or arm64 would
+          # silently get the amd64 base.
+          base=$(sed -n 's/^FROM \(.*\)$/\1/p' Dockerfile)
+          docker buildx imagetools inspect --raw "$base" | jq -e '.manifests | map(.platform.architecture) | index("arm64") and index("amd64")' > /dev/null ||
+            { echo "The Dockerfile base is not a multi-platform index with amd64 and arm64: $base"; exit 1; }
+          docker buildx build --platform linux/amd64,linux/arm64 --provenance=false --sbom=false \
+            --output "type=oci,dest=$RUNNER_TEMP/image.tar" .
+          ls -l "$RUNNER_TEMP/image.tar"
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: github.event_name == 'push'
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            target
+          key: cargo-image-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
 
   all-green:
     name: all-green
-    needs: [gate, commits, ship, workflows, lint, deps, test]
+    needs: [gate, commits, ship, workflows, lint, deps, test, chart, image]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 2
@@ -288,3 +473,402 @@ jobs:
             exit 1
           fi
           echo "✅ all green"
+
+  # ---- Release: push to main only (docs/HANDOVER.md §15; maintenance-manager §16) ----
+  # No caches in any release job (A2). Binaries move between jobs as artifacts,
+  # and every consumer checks each one against the sha256 its build job output.
+
+  version:
+    name: version
+    needs: all-green
+    if: ${{ !cancelled() && needs.all-green.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read # checkout with tags; read releases
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      released: ${{ steps.version.outputs.released }}
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            *.actions.githubusercontent.com:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Compute the version
+        id: version
+        run: |
+          out=$(sh scripts/ci/next-version.sh)
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -Eq '^version=[0-9]+\.[0-9]+\.[0-9]+$'
+          printf '%s\n' "$out" >> "$GITHUB_OUTPUT"
+      - name: Fail if this version is already released
+        if: steps.version.outputs.released == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          draft=$(gh release view "v$VERSION" --json isDraft --jq .isDraft 2>/dev/null || echo none)
+          if [ "$draft" = false ]; then
+            echo "v$VERSION is already a published release. Releases are immutable: fix forward with a new feat/fix PR."
+            exit 1
+          fi
+
+  build-linux-amd64:
+    name: build-linux-amd64
+    needs: version
+    if: ${{ !cancelled() && needs.version.result == 'success' && needs.version.outputs.released == 'true' }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    permissions:
+      contents: read # checkout
+    outputs:
+      sha256: ${{ steps.pack.outputs.sha256 }}
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            static.rust-lang.org:443
+            index.crates.io:443
+            static.crates.io:443
+            *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build and pack
+        id: pack
+        env:
+          FIRELIGHT_VERSION: ${{ needs.version.outputs.version }}
+          TARGET: linux-amd64
+        run: sh scripts/ci/build-release.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: firelight-linux-amd64
+          path: dist/firelight-*-linux-amd64.tar.gz
+          if-no-files-found: error
+          retention-days: 3
+
+  build-linux-arm64:
+    name: build-linux-arm64
+    needs: version
+    if: ${{ !cancelled() && needs.version.result == 'success' && needs.version.outputs.released == 'true' }}
+    runs-on: ubuntu-22.04-arm
+    timeout-minutes: 45
+    permissions:
+      contents: read # checkout
+    outputs:
+      sha256: ${{ steps.pack.outputs.sha256 }}
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            static.rust-lang.org:443
+            index.crates.io:443
+            static.crates.io:443
+            *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build and pack
+        id: pack
+        env:
+          FIRELIGHT_VERSION: ${{ needs.version.outputs.version }}
+          TARGET: linux-arm64
+        run: sh scripts/ci/build-release.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: firelight-linux-arm64
+          path: dist/firelight-*-linux-arm64.tar.gz
+          if-no-files-found: error
+          retention-days: 3
+
+  # harden-runner's block mode only enforces on Linux, so the macOS builds run
+  # without egress control (docs/security.md); tools/harness allows exactly
+  # these two jobs to skip it.
+  build-macos-arm64:
+    name: build-macos-arm64
+    needs: version
+    if: ${{ !cancelled() && needs.version.result == 'success' && needs.version.outputs.released == 'true' }}
+    runs-on: macos-15
+    timeout-minutes: 45
+    permissions:
+      contents: read # checkout
+    outputs:
+      sha256: ${{ steps.pack.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build and pack
+        id: pack
+        env:
+          FIRELIGHT_VERSION: ${{ needs.version.outputs.version }}
+          TARGET: macos-arm64
+        run: sh scripts/ci/build-release.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: firelight-macos-arm64
+          path: dist/firelight-*-macos-arm64.tar.gz
+          if-no-files-found: error
+          retention-days: 3
+
+  build-macos-amd64:
+    name: build-macos-amd64
+    needs: version
+    if: ${{ !cancelled() && needs.version.result == 'success' && needs.version.outputs.released == 'true' }}
+    runs-on: macos-15-intel
+    timeout-minutes: 60
+    permissions:
+      contents: read # checkout
+    outputs:
+      sha256: ${{ steps.pack.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build and pack
+        id: pack
+        env:
+          FIRELIGHT_VERSION: ${{ needs.version.outputs.version }}
+          TARGET: macos-amd64
+        run: sh scripts/ci/build-release.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: firelight-macos-amd64
+          path: dist/firelight-*-macos-amd64.tar.gz
+          if-no-files-found: error
+          retention-days: 3
+
+  publish:
+    name: publish
+    needs: [version, build-linux-amd64, build-linux-arm64, build-macos-arm64, build-macos-amd64]
+    if: ${{ !cancelled() && needs.build-linux-amd64.result == 'success' && needs.build-linux-arm64.result == 'success' && needs.build-macos-arm64.result == 'success' && needs.build-macos-amd64.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read # checkout
+      packages: write # push our image and our chart to GHCR (only those two)
+    outputs:
+      image_digest: ${{ steps.image.outputs.digest }}
+      chart_digest: ${{ steps.chart.outputs.digest }}
+      sums_digest: ${{ steps.sums.outputs.digest }}
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            release-assets.githubusercontent.com:443
+            objects.githubusercontent.com:443
+            get.helm.sh:443
+            ghcr.io:443
+            pkg-containers.githubusercontent.com:443
+            gcr.io:443
+            storage.googleapis.com:443
+            mirror.gcr.io:443
+            *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: firelight-*
+          path: dist
+          merge-multiple: true
+      - name: Check every binary against its build job's sha256; write SHA256SUMS
+        id: sums
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          SHA_LINUX_AMD64: ${{ needs.build-linux-amd64.outputs.sha256 }}
+          SHA_LINUX_ARM64: ${{ needs.build-linux-arm64.outputs.sha256 }}
+          SHA_MACOS_ARM64: ${{ needs.build-macos-arm64.outputs.sha256 }}
+          SHA_MACOS_AMD64: ${{ needs.build-macos-amd64.outputs.sha256 }}
+        run: sh scripts/ci/release-sums.sh
+      - name: Build and push the image (amd64 + arm64)
+        id: image
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          for arch in amd64 arm64; do
+            tar -xzf "dist/firelight-v$VERSION-linux-$arch.tar.gz" -C "$RUNNER_TEMP" "firelight-v$VERSION-linux-$arch/firelight"
+            cp "$RUNNER_TEMP/firelight-v$VERSION-linux-$arch/firelight" "dist/firelight-linux-$arch"
+          done
+          mkdir -p ~/.docker/cli-plugins
+          scripts/dev/t buildx version
+          cp .tools/buildx-*/buildx ~/.docker/cli-plugins/docker-buildx
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          # BuildKit v0.34.1 by digest, from Google's Docker Hub mirror (no Docker Hub egress).
+          docker buildx create --use --name fl \
+            --driver-opt image=mirror.gcr.io/moby/buildkit@sha256:99368f3e46177c6405b9740e4461d91cee004128daeecca78d4ceac50ec1da5c
+          docker buildx build --platform linux/amd64,linux/arm64 \
+            --label org.opencontainers.image.source=https://github.com/prosperity-solutions/firelight \
+            --label org.opencontainers.image.version="$VERSION" \
+            --label org.opencontainers.image.licenses=MIT \
+            --annotation index:org.opencontainers.image.source=https://github.com/prosperity-solutions/firelight \
+            --provenance=false --sbom=false \
+            --metadata-file "$RUNNER_TEMP/image.json" \
+            -t "ghcr.io/prosperity-solutions/firelight:v$VERSION" --push .
+          digest=$(jq -r '."containerimage.digest"' "$RUNNER_TEMP/image.json")
+          printf '%s' "$digest" | grep -Eq '^sha256:[0-9a-f]{64}$' || { echo "unexpected image digest: $digest"; exit 1; }
+          echo "image: ghcr.io/prosperity-solutions/firelight@$digest"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      - name: Package and push the chart (image pinned by digest)
+        id: chart
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          sed -i "s/^  digest: \"\"$/  digest: \"$IMAGE_DIGEST\"/" chart/values.yaml
+          if [ "$(grep -c "^  digest: \"$IMAGE_DIGEST\"$" chart/values.yaml)" != 1 ]; then
+            echo "Could not pin image.digest in chart/values.yaml (expected exactly one '  digest: \"\"' line)."
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/chart"
+          scripts/dev/t helm package chart --version "$VERSION" --app-version "$VERSION" -d "$RUNNER_TEMP/chart"
+          printf '%s' "$GH_TOKEN" | scripts/dev/t helm registry login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          out=$(scripts/dev/t helm push "$RUNNER_TEMP/chart/firelight-$VERSION.tgz" oci://ghcr.io/prosperity-solutions/charts 2>&1)
+          printf '%s\n' "$out"
+          digest=$(printf '%s\n' "$out" | sed -n 's/^Digest: \(sha256:[0-9a-f]\{64\}\)$/\1/p')
+          [ -n "$digest" ] || { echo "helm push printed no digest."; exit 1; }
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+  attest:
+    name: attest
+    needs: [version, build-linux-amd64, build-linux-arm64, build-macos-arm64, build-macos-amd64, publish]
+    if: ${{ !cancelled() && needs.publish.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # No checkout, no run steps, first-party actions only: one of two jobs that
+    # hold an OIDC token (A4). One subject per asset, from the build outputs.
+    permissions:
+      id-token: write # Sigstore certificate via GitHub OIDC
+      attestations: write # store the provenance in GitHub's attestation store
+    steps:
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: firelight-v${{ needs.version.outputs.version }}-linux-amd64.tar.gz
+          subject-digest: sha256:${{ needs.build-linux-amd64.outputs.sha256 }}
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: firelight-v${{ needs.version.outputs.version }}-linux-arm64.tar.gz
+          subject-digest: sha256:${{ needs.build-linux-arm64.outputs.sha256 }}
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: firelight-v${{ needs.version.outputs.version }}-macos-arm64.tar.gz
+          subject-digest: sha256:${{ needs.build-macos-arm64.outputs.sha256 }}
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: firelight-v${{ needs.version.outputs.version }}-macos-amd64.tar.gz
+          subject-digest: sha256:${{ needs.build-macos-amd64.outputs.sha256 }}
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: SHA256SUMS
+          subject-digest: ${{ needs.publish.outputs.sums_digest }}
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ghcr.io/prosperity-solutions/firelight
+          subject-digest: ${{ needs.publish.outputs.image_digest }}
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ghcr.io/prosperity-solutions/charts/firelight
+          subject-digest: ${{ needs.publish.outputs.chart_digest }}
+
+  release:
+    name: release
+    needs: [version, build-linux-amd64, build-linux-arm64, build-macos-arm64, build-macos-amd64, publish, attest]
+    if: ${{ !cancelled() && needs.attest.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write # create and publish the GitHub release (which creates the tag)
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            uploads.github.com:443
+            *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: firelight-*
+          path: dist
+          merge-multiple: true
+      - name: Check every asset again; SHA256SUMS must match the attested one
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          SHA_LINUX_AMD64: ${{ needs.build-linux-amd64.outputs.sha256 }}
+          SHA_LINUX_ARM64: ${{ needs.build-linux-arm64.outputs.sha256 }}
+          SHA_MACOS_ARM64: ${{ needs.build-macos-arm64.outputs.sha256 }}
+          SHA_MACOS_AMD64: ${{ needs.build-macos-amd64.outputs.sha256 }}
+          SUMS_DIGEST: ${{ needs.publish.outputs.sums_digest }}
+        run: |
+          sh scripts/ci/release-sums.sh > "$RUNNER_TEMP/sums.out"
+          cat "$RUNNER_TEMP/sums.out"
+          grep -qx "digest=$SUMS_DIGEST" "$RUNNER_TEMP/sums.out" || { echo "SHA256SUMS differs from the attested one."; exit 1; }
+      - name: Create, fill and publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+          IMAGE_DIGEST: ${{ needs.publish.outputs.image_digest }}
+          CHART_DIGEST: ${{ needs.publish.outputs.chart_digest }}
+        run: sh scripts/ci/release-publish.sh
+
+  verify:
+    name: verify
+    needs: [version, publish, release]
+    if: ${{ !cancelled() && needs.release.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read # checkout; download release assets
+      attestations: read # gh attestation verify
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            get.helm.sh:443
+            ghcr.io:443
+            pkg-containers.githubusercontent.com:443
+            tuf-repo-cdn.sigstore.dev:443
+            fulcio.sigstore.dev:443
+            rekor.sigstore.dev:443
+            tuf-repo.github.com:443
+            tmaproduction.blob.core.windows.net:443
+            *.actions.githubusercontent.com:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify everything as a user would (anonymous pulls, attestations, platforms, render)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+          IMAGE_DIGEST: ${{ needs.publish.outputs.image_digest }}
+          CHART_DIGEST: ${{ needs.publish.outputs.chart_digest }}
+        run: sh scripts/ci/release-verify.sh
