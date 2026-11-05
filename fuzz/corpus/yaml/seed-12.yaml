@@ -1,0 +1,12 @@
+format: 1
+spaces:
+  - id: platform
+    title: Platform
+    summary: Environments, clusters, access, deploys.
+    icon: server
+    order: 10
+  - id: support
+    title: Support
+    summary: What the support team needs every day.
+    icon: help
+    order: 20

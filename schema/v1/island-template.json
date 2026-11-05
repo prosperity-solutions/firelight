@@ -1,0 +1,125 @@
+{
+  "$defs": {
+    "InputYaml": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "name": {
+          "description": "The placeholder name used as `{name}` in URLs.",
+          "type": "string"
+        },
+        "pattern": {
+          "description": "An anchored regular expression (`^…$`) every value must match.",
+          "type": "string"
+        },
+        "placeholder": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "label",
+        "pattern"
+      ],
+      "type": "object"
+    },
+    "TemplateLinkYaml": {
+      "additionalProperties": false,
+      "properties": {
+        "icon": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "label": {
+          "type": "string"
+        },
+        "url": {
+          "description": "May use `{name}` only as the host's first label, one whole path segment, or one query value.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "url"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://firelight.oss.life.li/schema/v1/island-template.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "const": 1,
+      "description": "The format version: always 1."
+    },
+    "help": {
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "inputs": {
+      "items": {
+        "$ref": "#/$defs/InputYaml"
+      },
+      "type": "array"
+    },
+    "links": {
+      "items": {
+        "$ref": "#/$defs/TemplateLinkYaml"
+      },
+      "type": "array"
+    },
+    "order": {
+      "default": null,
+      "format": "int64",
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "place": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "space": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "title": {
+      "type": "string"
+    },
+    "type": {
+      "const": "template"
+    }
+  },
+  "required": [
+    "format",
+    "type",
+    "title",
+    "inputs",
+    "links"
+  ],
+  "title": "Firelight island, type: template (format 1)",
+  "type": "object"
+}

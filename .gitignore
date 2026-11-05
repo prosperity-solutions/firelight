@@ -7,3 +7,6 @@ notes/
 .claude/worktrees/
 .claude/settings.local.json
 .DS_Store
+/fuzz/target/
+/fuzz/Cargo.lock
+/fuzz/artifacts/

@@ -1,0 +1,31 @@
+---
+source: crates/firelight-format/tests/fixtures.rs
+expression: "format!(\"{diags}---\\n{}\", render(&cat))"
+---
+acme-app/.firelight/islands/hologram.yaml:2:7: warning: island type "hologram" is not one this Firelight knows (cards, links, template, cards-contribution); the island is skipped, the rest of the repo works
+---
+space platform "Platform" (order 10, declared by [acme-infra], repos [acme-app, acme-infra])
+  top: Access · Errors · Team chat
+  island acme-infra/environments "Environments" [main] order 10
+    card production "Production" Danger (from acme-infra)
+      apps: App <https://app.acme.example>, API <https://api.acme.example>
+      tools: Argo CD <https://argo.acme.example> ?acme-infra/argocd
+    card staging "Staging" None (from acme-infra)
+      apps: App <https://app.staging.acme.example>
+      tools: Argo CD <https://argo.staging.acme.example> ?acme-infra/argocd, Traces <https://traces.staging.acme.example>
+    card demo "Demo" None (from acme-app)
+      apps: App <https://demo.acme.example>
+  island acme-infra/consoles "Consoles" [main] order 20
+    links: Cloud console
+  island acme-app/previews "PR previews" [main] order 30
+    template inputs [pr] links [https://app-{pr}.preview.acme.example, https://ci.acme.example/previews/{pr}/logs, https://git.acme.example/acme/acme-app/pulls?id={pr}]
+  island /unsorted "Unsorted" [main] order 9223372036854775807
+    card acme-app "App" None (from acme-app)
+      -: Old dashboard <https://dash.acme.example>
+  footer: acme-app · Status
+  entries: acme-app/deploy-an-app, acme-app/onboarding, acme-app/release-train, acme-infra/access-model, acme-infra/argocd, acme-infra/request-access
+space support "Support" (order 20, declared by [acme-infra], repos [acme-app, acme-infra])
+  top: Access · Tickets
+  footer: 
+  entries: acme-app/onboarding, acme-infra/access-model, acme-infra/request-access
+acme-app: .firelight/links.yaml:45:9: warning: link "old-dashboard": island acme-infra/dashboards does not exist, so it goes into the Unsorted card

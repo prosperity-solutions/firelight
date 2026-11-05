@@ -1,0 +1,50 @@
+format: 1
+links:
+  - id: app-production
+    label: App
+    url: https://app.acme.example
+    note: app.acme.example
+    icon: globe
+    at: { island: acme-infra/environments, card: production, section: apps }
+  - id: api-production
+    label: API
+    url: https://api.acme.example
+    icon: server
+    at: { island: acme-infra/environments, card: production, section: apps }
+    order: 20
+  - id: app-staging
+    label: App
+    url: https://app.staging.acme.example
+    icon: globe
+    at: { island: acme-infra/environments, card: staging, section: apps }
+  - id: app-demo
+    label: App
+    url: https://demo.acme.example
+    icon: globe
+    at: { island: acme-infra/environments, card: demo, section: apps }
+  - id: errors
+    label: Errors
+    url: https://errors.acme.example
+    icon: bug
+    at: { place: top }
+  - id: team-chat
+    label: Team chat
+    url: https://chat.acme.example
+    icon: message
+    at: { place: top }
+  - id: ticketing
+    label: Tickets
+    url: https://tickets.acme.example
+    icon: ticket
+    at: { place: top, space: support }
+  - id: old-dashboard
+    label: Old dashboard
+    url: https://dash.acme.example
+    icon: chart
+    note: going away
+    at: { island: acme-infra/dashboards }
+  - id: repo
+    label: acme-app
+    url: https://git.acme.example/acme/acme-app
+    icon: git
+    at: { place: footer }

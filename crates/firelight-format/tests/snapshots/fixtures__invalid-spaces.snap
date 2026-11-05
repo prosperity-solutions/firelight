@@ -1,0 +1,9 @@
+---
+source: crates/firelight-format/tests/fixtures.rs
+expression: out
+---
+invalid/spaces/.firelight/islands/where.yaml:4:8: error: "firelight" is reserved: `all` is generated, `firelight` holds Firelight's own docs
+invalid/spaces/.firelight/repo.yaml:5:10: error: "all" is reserved: `all` is generated, `firelight` holds Firelight's own docs
+invalid/spaces/.firelight/spaces.yaml:3:11: error: "default" is reserved (all, default, firelight); pick another id
+invalid/spaces/.firelight/spaces.yaml:4:11: error: "firelight" is reserved (all, default, firelight); pick another id
+invalid/spaces/.firelight/spaces.yaml:6:11: error: space "platform" is declared twice

@@ -1,0 +1,7 @@
+---
+source: crates/firelight-format/tests/fixtures.rs
+expression: out
+---
+invalid/unknown-keys/.firelight/golden.yaml:1:1: error: missing `format: 1` (every YAML file and front matter starts with it)
+invalid/unknown-keys/.firelight/links.yaml:7:5: error: unknown key `colour`, expected one of: id, label, url, note, icon, at, order, entry
+invalid/unknown-keys/.firelight/repo.yaml:5:1: error: unknown key `sumary`, expected one of: format, id, name, summary, owner, spaces, relations

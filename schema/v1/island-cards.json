@@ -1,0 +1,100 @@
+{
+  "$defs": {
+    "CardYaml": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "order": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "tone": {
+          "description": "`danger`, `warn` or `none`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "title"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://firelight.oss.life.li/schema/v1/island-cards.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Fields every island has.",
+  "properties": {
+    "cards": {
+      "items": {
+        "$ref": "#/$defs/CardYaml"
+      },
+      "type": "array"
+    },
+    "format": {
+      "const": 1,
+      "description": "The format version: always 1."
+    },
+    "id": {
+      "description": "Defaults to the file name.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "order": {
+      "default": null,
+      "format": "int64",
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "place": {
+      "description": "`main` (default), `top` or `footer`.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sections": {
+      "description": "Optional sub-headings inside every card, in this order.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "space": {
+      "description": "Defaults to the first of repo.yaml's spaces, else `default`.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "title": {
+      "type": "string"
+    },
+    "type": {
+      "const": "cards"
+    }
+  },
+  "required": [
+    "format",
+    "type",
+    "title"
+  ],
+  "title": "Firelight island, type: cards (format 1)",
+  "type": "object"
+}

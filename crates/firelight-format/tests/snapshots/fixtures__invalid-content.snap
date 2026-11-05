@@ -1,0 +1,18 @@
+---
+source: crates/firelight-format/tests/fixtures.rs
+expression: out
+---
+invalid/content/.firelight/concepts/colon.md:4:17: error: mapping values are not allowed in this context: a value that contains ": " needs quotes, e.g. summary: "Day one: accounts and access"
+invalid/content/.firelight/concepts/no-front-matter.md:1:1: error: an entry starts with front matter: a `---` line, `format: 1`, title, summary, then `---`
+invalid/content/.firelight/guides/long.md:3:8: error: title is empty
+invalid/content/.firelight/guides/long.md:4:10: error: summary has 201 characters; keep it to 200, because search results and list_entries show it
+invalid/content/.firelight/guides/schemes.md:6:1: error: "javascript:alert(1)" is not an allowed link: use https:, http: or mailto:, link:<ref> for a link, entry:<ref> for an entry, or #heading
+invalid/content/.firelight/guides/schemes.md:6:26: error: "data:text/html,hi" is not an allowed link: use https:, http: or mailto:, link:<ref> for a link, entry:<ref> for an entry, or #heading
+invalid/content/.firelight/guides/schemes.md:6:49: error: "file:///etc/passwd" is not an allowed link: use https:, http: or mailto:, link:<ref> for a link, entry:<ref> for an entry, or #heading
+invalid/content/.firelight/guides/schemes.md:6:73: error: "relative/page" is not an allowed link: use https:, http: or mailto:, link:<ref> for a link, entry:<ref> for an entry, or #heading
+invalid/content/.firelight/guides/schemes.md:8:1: error: images are not supported in v1 (no remote fetches on the page). Link to the image instead
+invalid/content/.firelight/links.yaml:5:10: error: "javascript:alert(1)" is not an allowed URL: use https:, http: or mailto:
+invalid/content/.firelight/links.yaml:10:11: error: "unicorn" is not a built-in icon: activity, alert, archive, bell, book, box, bug, calendar, chart, check, clock, cloud, code, compass, cpu, database, dollar, file, flag, folder, git, globe, grid, heart, help, home, key, layers, link, list, lock, mail, map, message, monitor, package, phone, refresh, rocket, search, server, settings, shield, star, terminal, ticket, tool, users, video, zap
+invalid/content/.firelight/links.yaml:11:9: error: place "middle": links go in `top` or `footer` (use an island for main)
+invalid/content/.firelight/links.yaml:15:9: error: at is one of {place: top|footer, space?}, {island: <ref>} or {island: <ref>, card: <id>, section?}
+invalid/content/.firelight/notes.txt: warning: not part of the .firelight/ format, so it is ignored

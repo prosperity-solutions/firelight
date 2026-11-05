@@ -1,0 +1,10 @@
+format: 1
+id: acme-app
+name: App
+summary: The Acme web app and its API, deployed to every environment.
+owner: App team
+spaces: [platform]
+relations:
+  - repo: acme-infra
+    when: You add a new environment variable that holds a secret
+    then: Add the secret to the app's Helm release in `releases/`

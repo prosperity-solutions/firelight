@@ -1,0 +1,5 @@
+format: 1
+type: cards-contribution
+island: links-only
+cards:
+  - { id: x, title: X }

@@ -1,0 +1,11 @@
+format: 1
+type: template
+title: PR previews
+order: 30
+inputs:
+  - { name: pr, label: "PR #", pattern: "^[0-9]{1,6}$", placeholder: "1234" }
+links:
+  - { label: App, url: "https://app-{pr}.preview.acme.example", icon: phone }
+  - { label: Logs, url: "https://ci.acme.example/previews/{pr}/logs", icon: file }
+  - { label: Pull request, url: "https://git.acme.example/acme/acme-app/pulls?id={pr}", icon: git }
+help: Only services the PR deployed exist.

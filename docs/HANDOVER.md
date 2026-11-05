@@ -205,7 +205,7 @@ spaces: [platform, support]         # optional; overrides repo.yaml's default
 It never grants rights to other people. See [the access model](entry:access-model).
 ```
 - **Markdown:** CommonMark + tables + task lists (pulldown-cmark). **Raw HTML is escaped, never rendered.** Images are not supported in v1 (no remote fetches on the page).
-- **Two link schemes:** `link:<ref>` renders the link's URL with a "Show me" glow; `entry:<ref>[#heading]` renders a permalink. Other URLs must be `https:`, `http:` or `mailto:`; anything else is an error.
+- **Two link schemes:** `link:<ref>` renders the link's URL with a "Show me" glow; `entry:<ref>[#heading]` renders a permalink. Other URLs must be `https:`, `http:`, `mailto:` or a same-page `#heading`; anything else is an error.
 - **Headings** get stable slug anchors. A duplicate slug gets `-2`, `-3`.
 - `title` is required. `summary` is required and ≤ 200 characters, because search results and `list_entries` show it.
 
@@ -279,7 +279,7 @@ format: 1
 questions:
   - query: how do I get admin rights
     expect: [request-access]          # refs; each must be in the top `within` results
-    within: 3
+    within: 3                          # 1–25, default 5
   - query: wie bekomme ich adminrechte
     expect: [request-access]
     needs: meaning                     # skipped when the embedder is off
@@ -468,7 +468,7 @@ A complete, copy-pasteable guide for running Firelight yourself, linked from the
 | command | what it does |
 |---|---|
 | `firelight serve` | the server (§3). |
-| `firelight check [DIR]` | validate a `.firelight/` folder. Only `firelight-format`: no network, no model. Errors as `path:line:col: message`, or `--json`. |
+| `firelight check [DIR…]` | validate `.firelight/` folders (several together, so refs between them resolve). Only `firelight-format`: no network, no model. Errors as `path:line:col: message`, or `--json`; `--strict` makes unresolved cross-repo refs errors. Exit 1 on any error. |
 | `firelight preview [DIR…]` | serve one or more local folders as `dir` sources on `127.0.0.1`, auth off, live reload on change. `--embedder off` for speed. |
 | `firelight preview --check [DIR…]` | build everything (validation, refs, islands, chunking, embeddings, repo golden questions), print a report, exit non-zero on any error or failing golden question. |
 | `firelight covers --base <ref> [DIR]` | in a PR: list entries whose `covers` paths changed while the entry didn't. Warns by default; `--strict` fails. |
@@ -883,7 +883,7 @@ Same rule as maintenance-manager §26: verify, decide (simplest option that keep
 | D5 | Image base | distroless/cc unless D1 needs the git CLI; then a slim base whose git is ≥ 2.40 (Debian bookworm ships 2.39, so not bookworm's package). **M1:** `gcr.io/distroless/cc-debian12:nonroot` by digest, holding the prebuilt binary only (no `RUN`, so a two-platform build needs no emulation); Linux binaries build on ubuntu-22.04 (glibc 2.35) so they run on Debian 12's glibc 2.36 and on older hosts. Revisited with D1 in M3 |
 | D6 | Browser test driver | Playwright (test-only Node) vs a Rust WebDriver/CDP crate; pick the one that runs axe reliably |
 | D7 | Dependency-age gate for crates | Port maintenance-manager's `depage` idea against crates.io publish dates, with `.github/fresh-deps.txt` exceptions. **Settled (bootstrap):** `tools/depage` (Rust, no dependencies, HTTP through `curl`) checks every crate a change adds to `Cargo.lock` against the crates.io sparse index's `pubtime` (entries without it predate the field, so they are old enough), the toolchain against Rust's release manifest `date`, and each binary tool's `released` date against its GitHub release. `scripts/dev/cargo-update.sh` resolves with cargo's `-Zmin-publish-age` (through `RUSTC_BOOTSTRAP`, for that one resolution) so new lockfiles only take versions ≥ 7 days old. Exceptions: `<name> <version> <expires> <reason>`, expiring ≤ 30 days after the head commit |
-| D8 | Maintained YAML crate | `serde_yaml` is unmaintained and `serde_yml` has a RustSec advisory: pick another maintained parser with line/column errors, and cap alias expansion (billion-laughs test) |
+| D8 | Maintained YAML crate | `serde_yaml` is unmaintained and `serde_yml` has a RustSec advisory: pick another maintained parser with line/column errors, and cap alias expansion (billion-laughs test). **Settled (M2):** `serde-saphyr` 2.0 (MIT/Apache-2.0, maintained): line/column on every error, `Spanned<T>` for positions, and a resource `Budget`; Firelight runs it far below the defaults (depth 24, 20,000 nodes, 64 anchors and aliases, 1 MiB of scalars, one document), so a billion-laughs document is refused (`yaml::tests::billion_laughs_is_refused`). `serde_yaml` and `serde_yml` are banned in `deny.toml` |
 | D9 | Version tool for Rust releases | Keep maintenance-manager's `svu`-style tag-only flow if it works without a Go toolchain; otherwise an equivalent. **Settled (M1):** `scripts/ci/next-version.sh`, POSIX sh over `git log`: releasable on `feat`, `fix` or a breaking change since the newest `v*` tag; feat → minor, fix → patch, breaking → minor below 1.0 and major from 1.0; first release v0.1.0. Tested against throwaway histories in `tools/harness` |
 | D10 | Rate limits for anonymous polling of public GitHub repos | Measure whether "no change" checks count against the limit; set the minimum poll interval for anonymous sources accordingly |
 | D11 | Wording, pitch, examples, page look | Your call: plain, warm, accessible, maintenance-manager's voice rules |

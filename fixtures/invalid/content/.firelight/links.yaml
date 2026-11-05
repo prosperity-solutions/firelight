@@ -1,0 +1,15 @@
+format: 1
+links:
+  - id: js
+    label: Click
+    url: javascript:alert(1)
+    at: { place: top }
+  - id: icon
+    label: Icon
+    url: https://i.acme.example
+    icon: unicorn
+    at: { place: middle }
+  - id: shape
+    label: Shape
+    url: https://s.acme.example
+    at: { island: x, place: top }

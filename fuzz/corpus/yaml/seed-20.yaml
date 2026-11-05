@@ -1,0 +1,8 @@
+format: 1
+type: cards
+title: Cards
+place: sidebar
+sections: [tools, tools]
+cards:
+  - { id: a, title: A, tone: purple }
+  - { id: a, title: A again }

@@ -1,0 +1,65 @@
+{
+  "$defs": {
+    "CardYaml": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "order": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "tone": {
+          "description": "`danger`, `warn` or `none`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "title"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://firelight.oss.life.li/schema/v1/island-cards-contribution.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "cards": {
+      "items": {
+        "$ref": "#/$defs/CardYaml"
+      },
+      "type": "array"
+    },
+    "format": {
+      "const": 1,
+      "description": "The format version: always 1."
+    },
+    "island": {
+      "description": "The cards island to add to, e.g. `infra-repo/environments`.",
+      "type": "string"
+    },
+    "type": {
+      "const": "cards-contribution"
+    }
+  },
+  "required": [
+    "format",
+    "type",
+    "island",
+    "cards"
+  ],
+  "title": "Firelight island, type: cards-contribution (format 1)",
+  "type": "object"
+}

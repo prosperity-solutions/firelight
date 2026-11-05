@@ -1,0 +1,8 @@
+format: 1
+questions:
+  - query: ""
+    expect: []
+  - query: what
+    expect: [nothing-here]
+    within: 99
+    needs: magic

@@ -1,0 +1,5 @@
+---
+source: crates/firelight-format/tests/fixtures.rs
+expression: out
+---
+invalid/missing-repo-yaml/.firelight/repo.yaml: error: missing: every .firelight/ folder needs a repo.yaml (format, id, name, summary)

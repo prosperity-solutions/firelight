@@ -1,5 +1,5 @@
 # Recipes (docs/HANDOVER.md §14). Run: scripts/dev/t just <recipe>
-# Recipes for later milestones (e2e, fuzz-seeds, preview, fixtures) arrive with them.
+# Recipes for later milestones (e2e, preview, fixtures) arrive with them.
 
 # Build the binary.
 build:
@@ -21,6 +21,16 @@ lint:
 # Regenerate the generated docs and schemas (CI fails when they drift).
 schema:
     cargo run --locked -q --bin firelight -- config reference > docs/config.md
+    rm -rf schema/v1
+    cargo run --locked -q --bin firelight -- schema --out schema/v1
+
+# The fuzz seed corpus on stable (the cargo-fuzz targets in fuzz/ need nightly).
+fuzz-seeds:
+    cargo test --locked -p firelight-format --test fuzz_seeds
+
+# Check the acme fixtures with the real binary.
+check-fixtures:
+    cargo run --locked -q --bin firelight -- check fixtures/acme-infra fixtures/acme-app
 
 # The chart's lint and render tests.
 chart:

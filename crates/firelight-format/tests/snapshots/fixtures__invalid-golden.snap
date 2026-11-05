@@ -1,0 +1,9 @@
+---
+source: crates/firelight-format/tests/fixtures.rs
+expression: out
+---
+invalid/golden/.firelight/golden.yaml:3:12: error: query is empty
+invalid/golden/.firelight/golden.yaml:3:12: error: expect needs at least one ref
+invalid/golden/.firelight/golden.yaml:6:14: error: entry or link "nothing-here" does not exist in this repo
+invalid/golden/.firelight/golden.yaml:7:13: error: within must be between 1 and 25
+invalid/golden/.firelight/golden.yaml:8:12: error: needs: "magic" — the only value is `meaning`

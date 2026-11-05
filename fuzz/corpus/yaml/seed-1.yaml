@@ -1,0 +1,7 @@
+format: 1
+questions:
+  - query: how do I deploy
+    expect: [deploy-an-app]
+    within: 3
+  - query: when does the release train leave
+    expect: [release-train]

@@ -2,6 +2,7 @@
 //!
 //! The binary: CLI, config loading, startup (docs/HANDOVER.md §3, §12.1).
 
+mod check;
 mod config;
 
 use std::process::ExitCode;
@@ -21,7 +22,7 @@ pub const COMMIT: &str = match option_env!("FIRELIGHT_COMMIT") {
     None => "unknown",
 };
 /// `.firelight/` format versions this binary reads (§5).
-pub const FORMAT_VERSIONS: &[u32] = &[1];
+pub const FORMAT_VERSIONS: &[u32] = firelight_format::FORMAT_VERSIONS;
 
 #[derive(Parser)]
 #[command(
@@ -38,6 +39,24 @@ struct Cli {
 enum Command {
     /// Run the server.
     Serve,
+    /// Validate .firelight/ folders: no network, no model. Errors as path:line:col.
+    Check {
+        /// Folders holding a .firelight/ (default: the current one). Several are checked together, so refs between them resolve.
+        dirs: Vec<std::path::PathBuf>,
+        /// Print JSON.
+        #[arg(long)]
+        json: bool,
+        /// Unresolved cross-repo refs are errors, not warnings.
+        #[arg(long)]
+        strict: bool,
+    },
+    /// Write the JSON Schemas of every .firelight/ YAML file (default: print the file names).
+    #[command(hide = true)]
+    Schema {
+        /// Folder to write schema/v1/*.json into.
+        #[arg(long)]
+        out: Option<std::path::PathBuf>,
+    },
     /// Check or print the configuration.
     Config {
         #[command(subcommand)]
@@ -112,6 +131,31 @@ fn main() -> ExitCode {
                 Err(code) => code,
             },
         },
+        Command::Check { dirs, json, strict } => check::run(check::Args { dirs, json, strict }),
+        Command::Schema { out } => {
+            let all = firelight_format::schema::all();
+            match out {
+                None => {
+                    for (name, _) in &all {
+                        println!("{name}");
+                    }
+                    ExitCode::SUCCESS
+                }
+                Some(dir) => {
+                    if let Err(e) = std::fs::create_dir_all(&dir) {
+                        eprintln!("firelight: cannot create {}: {e}", dir.display());
+                        return ExitCode::from(1);
+                    }
+                    for (name, text) in all {
+                        if let Err(e) = std::fs::write(dir.join(&name), text) {
+                            eprintln!("firelight: cannot write {name}: {e}");
+                            return ExitCode::from(1);
+                        }
+                    }
+                    ExitCode::SUCCESS
+                }
+            }
+        }
         Command::Serve => {
             let cfg = match load(Purpose::Serve) {
                 Ok(c) => c,

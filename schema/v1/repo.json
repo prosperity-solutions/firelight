@@ -1,0 +1,79 @@
+{
+  "$defs": {
+    "RelationYaml": {
+      "additionalProperties": false,
+      "properties": {
+        "repo": {
+          "description": "The other repo's id.",
+          "type": "string"
+        },
+        "then": {
+          "description": "What to do, e.g. \"Add its Helm release in `releases/`\".",
+          "type": "string"
+        },
+        "when": {
+          "description": "The trigger, e.g. \"A new app is added there\".",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo",
+        "when",
+        "then"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://firelight.oss.life.li/schema/v1/repo.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "`.firelight/repo.yaml`: who this repo is and how it relates to others.",
+  "properties": {
+    "format": {
+      "const": 1,
+      "description": "The format version: always 1."
+    },
+    "id": {
+      "description": "The repo id: lowercase letters, digits and dashes. Must equal the source id Firelight is configured with.",
+      "type": "string"
+    },
+    "name": {
+      "description": "Display name.",
+      "type": "string"
+    },
+    "owner": {
+      "default": null,
+      "description": "Who owns it, as free text.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "relations": {
+      "description": "Cross-repo rules: \"when you do X here, also do Y there\".",
+      "items": {
+        "$ref": "#/$defs/RelationYaml"
+      },
+      "type": "array"
+    },
+    "spaces": {
+      "description": "Default space(s) for this repo's islands and entries.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "summary": {
+      "description": "One sentence: what this repo is.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "format",
+    "id",
+    "name",
+    "summary"
+  ],
+  "title": "Firelight repo.yaml (format 1)",
+  "type": "object"
+}

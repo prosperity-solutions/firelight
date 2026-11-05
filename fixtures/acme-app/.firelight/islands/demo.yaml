@@ -1,0 +1,5 @@
+format: 1
+type: cards-contribution
+island: acme-infra/environments
+cards:
+  - { id: demo, title: Demo, order: 30 }

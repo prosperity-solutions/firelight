@@ -1,0 +1,14 @@
+format: 1
+type: template
+title: Templates
+inputs:
+  - { name: pr, label: PR, pattern: "[0-9]+" }
+  - { name: env, label: Env, pattern: "^[a-z]+$" }
+  - { name: Bad, label: Bad, pattern: "^x$" }
+links:
+  - { label: Domain, url: "https://{env}.example" }
+  - { label: Deep, url: "https://x.{env}.acme.example" }
+  - { label: Partial, url: "https://ci.acme.example/runs-{env}/" }
+  - { label: Key, url: "https://ci.acme.example/?{env}=1" }
+  - { label: Scheme, url: "ftp://{env}.ci.acme.example" }
+  - { label: Fine, url: "https://ci.acme.example/runs/{env}" }

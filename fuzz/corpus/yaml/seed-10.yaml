@@ -1,0 +1,41 @@
+format: 1
+links:
+  - id: argo-production
+    label: Argo CD
+    url: https://argo.acme.example
+    note: argo.acme.example
+    icon: refresh
+    at: { island: environments, card: production, section: tools }
+    entry: argocd
+  - id: argo-staging
+    label: Argo CD
+    url: https://argo.staging.acme.example
+    note: argo.staging.acme.example
+    icon: refresh
+    at: { island: environments, card: staging, section: tools }
+    entry: argocd
+    order: 20
+  - id: traces-staging
+    label: Traces
+    url: https://traces.staging.acme.example
+    icon: activity
+    at: { island: environments, card: staging, section: tools }
+    order: 30
+  - id: access-portal
+    label: Access
+    url: https://access.acme.example
+    icon: key
+    entry: access-model
+    at:
+      - { place: top }
+      - { place: top, space: support }
+  - id: cloud-console
+    label: Cloud console
+    url: https://console.cloud.acme.example
+    icon: cloud
+    at: { island: consoles }
+  - id: status-page
+    label: Status
+    url: https://status.acme.example
+    icon: activity
+    at: { place: footer }

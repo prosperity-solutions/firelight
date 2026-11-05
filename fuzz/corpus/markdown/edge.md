@@ -1,0 +1,1 @@
+[x](link:)[y](entry:#)![](x)<a href="javascript:x">
