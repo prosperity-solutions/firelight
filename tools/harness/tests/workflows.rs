@@ -450,3 +450,30 @@ fn walk(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
     }
     out
 }
+
+/// §17.3: npm (test-only) installs from the lockfile without install scripts.
+#[test]
+fn npm_is_locked_and_scriptless() {
+    let text = read(CI);
+    for (i, l) in text.lines().enumerate() {
+        let t = l.trim();
+        if t.starts_with("run: npm ") || t.contains(" npm ") && t.starts_with("run:") {
+            assert!(
+                t.contains("npm ci --ignore-scripts"),
+                "ci.yml:{}: npm must be `npm ci --ignore-scripts`: {t}",
+                i + 1
+            );
+        }
+        if t.contains("npx ") {
+            assert!(
+                t.contains("npx --no-install"),
+                "ci.yml:{}: npx must not download packages: {t}",
+                i + 1
+            );
+        }
+    }
+    assert!(
+        root().join("tests/browser/package-lock.json").exists(),
+        "tests/browser/package-lock.json is committed"
+    );
+}

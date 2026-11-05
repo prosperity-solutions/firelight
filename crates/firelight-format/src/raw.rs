@@ -192,7 +192,8 @@ pub struct TemplateIslandYaml {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct InputYaml {
-    /// The placeholder name used as `{name}` in URLs.
+    /// The placeholder name used as `{name}` in URLs: lowercase letters, digits
+    /// and `_`, starting with a letter. `s` and `format` are reserved.
     pub name: P<String>,
     pub label: P<String>,
     /// An anchored regular expression (`^…$`) every value must match.

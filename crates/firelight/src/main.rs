@@ -5,6 +5,7 @@
 mod check;
 mod config;
 mod hub;
+mod preview;
 mod sources;
 
 use std::process::ExitCode;
@@ -41,6 +42,17 @@ struct Cli {
 enum Command {
     /// Run the server.
     Serve,
+    /// Serve local .firelight/ folders on 127.0.0.1 with live reload, auth off.
+    Preview {
+        /// Folders holding a .firelight/ (default: the current one).
+        dirs: Vec<std::path::PathBuf>,
+        /// Address to listen on.
+        #[arg(long, default_value = "127.0.0.1:8080")]
+        listen: std::net::SocketAddr,
+        /// The embedder for meaning search (`off` for speed).
+        #[arg(long)]
+        embedder: Option<String>,
+    },
     /// Validate .firelight/ folders: no network, no model. Errors as path:line:col.
     Check {
         /// Folders holding a .firelight/ (default: the current one). Several are checked together, so refs between them resolve.
@@ -133,6 +145,25 @@ fn main() -> ExitCode {
                 Err(code) => code,
             },
         },
+        Command::Preview {
+            dirs,
+            listen,
+            embedder,
+        } => {
+            let format = std::env::var("FIRELIGHT_LOG_FORMAT").unwrap_or_else(|_| "pretty".into());
+            init_logging_with("info", &format);
+            match preview::run(preview::Args {
+                dirs,
+                listen,
+                embedder,
+            }) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(e) => {
+                    eprintln!("firelight preview: {e:#}");
+                    ExitCode::from(1)
+                }
+            }
+        }
         Command::Check { dirs, json, strict } => check::run(check::Args { dirs, json, strict }),
         Command::Schema { out } => {
             let all = firelight_format::schema::all();
@@ -185,11 +216,15 @@ fn load(purpose: Purpose) -> Result<Config, ExitCode> {
 }
 
 fn init_logging(cfg: &Config) {
-    let filter = tracing_subscriber::EnvFilter::new(format!("{},hyper=warn", cfg.log_level));
+    init_logging_with(&cfg.log_level, &cfg.log_format);
+}
+
+fn init_logging_with(level: &str, format: &str) {
+    let filter = tracing_subscriber::EnvFilter::new(format!("{level},hyper=warn"));
     let b = tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_writer(std::io::stdout);
-    if cfg.log_format == "pretty" {
+    if format == "pretty" {
         b.init();
     } else {
         b.json().flatten_event(true).with_current_span(false).init();
@@ -206,7 +241,15 @@ fn serve(cfg: Config) -> anyhow::Result<()> {
         })?;
         tracing::info!(version = VERSION, commit = COMMIT, "firelight starting");
         let started = sources::start(&cfg).await?;
-        let mut state = firelight_server::AppState::new();
+        let ui = firelight_server::pages::Ui {
+            title: cfg.ui_title.clone(),
+            default_space: cfg.ui_default_space.clone(),
+            public_url: cfg.public_url.as_ref().map(|u| u.as_str().trim_end_matches('/').to_string()).unwrap_or_default(),
+            version: VERSION.into(),
+            mcp_token: cfg.mcp_auth == config::McpAuth::Token,
+            live: false,
+        };
+        let mut state = firelight_server::AppState::new().with_content(started.hub.clone(), ui, &cfg.ui_accent);
         if let Some(w) = started.webhook {
             state = state.with_webhook(w);
         }

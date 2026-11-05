@@ -931,7 +931,7 @@ impl Checker {
                 let mut names = BTreeSet::new();
                 for i in &y.inputs {
                     if !template::valid_name(&i.name) {
-                        self.err_at(path, &i.name, "template-input", format!("{:?} is not an input name: lowercase letters, digits and _, starting with a letter", i.name.value));
+                        self.err_at(path, &i.name, "template-input", format!("{:?} is not an input name: lowercase letters, digits and _, starting with a letter, and not `s` or `format`", i.name.value));
                         continue;
                     }
                     if !names.insert(i.name.value.clone()) {

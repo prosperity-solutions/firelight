@@ -1,0 +1,16 @@
+# The Veld `serve` variant (veld.json, docs/HANDOVER.md §13.6): the real server
+# with git sources, polling and SQLite, nothing secret. The sources are the
+# local bare repos that `just fixtures` builds; veld.json passes them in
+# FIRELIGHT_SOURCES with absolute file:// URLs.
+[auth]
+ui = "none"
+mcp = "none"
+
+[poll]
+interval = "10s"
+
+[log]
+format = "pretty"
+
+[ui]
+title = "Firelight·acme"

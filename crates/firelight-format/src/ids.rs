@@ -76,21 +76,38 @@ pub fn slug(text: &str) -> String {
 
 #[derive(Default)]
 pub struct Slugger {
-    seen: std::collections::HashMap<String, u32>,
+    seen: std::collections::HashSet<String>,
 }
 
 impl Slugger {
+    /// The slug of `text`, with `-2`, `-3`… until it is one not handed out
+    /// yet ("Setup", "Setup", "Setup 2" → setup, setup-2, setup-2-2).
     pub fn next(&mut self, text: &str) -> String {
         let base = slug(text);
-        let n = self.seen.entry(base.clone()).or_insert(0);
-        *n += 1;
-        if *n == 1 { base } else { format!("{base}-{n}") }
+        let mut s = base.clone();
+        let mut n = 1;
+        while self.seen.contains(&s) {
+            n += 1;
+            s = format!("{base}-{n}");
+        }
+        self.seen.insert(s.clone());
+        s
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn slugs_never_repeat() {
+        let mut s = Slugger::default();
+        let got: Vec<String> = ["Setup", "Setup", "Setup 2", "Setup"]
+            .iter()
+            .map(|t| s.next(t))
+            .collect();
+        assert_eq!(got, ["setup", "setup-2", "setup-2-2", "setup-3"]);
+    }
 
     #[test]
     fn ids() {

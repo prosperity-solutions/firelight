@@ -7,7 +7,7 @@
           "type": "string"
         },
         "name": {
-          "description": "The placeholder name used as `{name}` in URLs.",
+          "description": "The placeholder name used as `{name}` in URLs: lowercase letters, digits\nand `_`, starting with a letter. `s` and `format` are reserved.",
           "type": "string"
         },
         "pattern": {

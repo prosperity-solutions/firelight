@@ -267,6 +267,7 @@ links:
   - { label: Docs, url: "https://docs-{pr}.preview.acme.example", icon: file }
 help: Only services the PR deployed exist.
 ```
+- Input names are `^[a-z][a-z0-9_]{0,31}$`; `s` and `format` are reserved (the `/i/` route reads them).
 - Values must match their anchored `pattern` before anything renders. A template URL may use a placeholder only in the host's first label, as one whole path segment, or as one query value; that's checked at validation, so a value can never change the scheme or the registered domain.
 - **Encoding per position:** in a host label the value must also match `^[a-z0-9-]{1,63}$` (whatever `pattern` says); in a path segment it is percent-encoded as one segment and `.`/`..` are rejected; in a query value it is percent-encoded as a query component. A test per position covers dot-segments, `/`, `%`, `@`, `#`, `?` and Unicode.
 - It works without JavaScript: the island is a `GET` form to `/i/<repo>/<id>`, which renders the links server-side. With JS it updates in place. `#<island-ref>:<name>=<value>` in the page URL pre-fills it.
@@ -535,27 +536,25 @@ The repo ships a `veld.json` at its root, so `veld start firelight` (or one clic
         // The acme fixture repos, word search only: starts in seconds. For UI and API work.
         "fixtures": {
           "type": "start_server",
-          "argv": ["cargo", "run", "--bin", "firelight", "--", "preview",
-                   "fixtures/acme-app", "fixtures/acme-infra",
-                   "--embedder", "off", "--listen", "127.0.0.1:${veld.port}"],
+          "argv": ["cargo", "run", "--locked", "--bin", "firelight", "--", "preview", "fixtures/acme-app", "fixtures/acme-infra", "--embedder", "off", "--listen", "127.0.0.1:${veld.port}"],
           "health_check": { "type": "http", "path": "/readyz", "expect_status": 200, "timeout_seconds": 300 }
         },
         // Firelight's own .firelight/ with the real default model: what writing Firelight docs looks like.
         "self": {
           "type": "start_server",
-          "argv": ["cargo", "run", "--release", "--bin", "firelight", "--", "preview", ".",
-                   "--listen", "127.0.0.1:${veld.port}"],
+          "argv": ["cargo", "run", "--locked", "--release", "--bin", "firelight", "--", "preview", ".", "--listen", "127.0.0.1:${veld.port}"],
           "health_check": { "type": "http", "path": "/readyz", "expect_status": 200, "timeout_seconds": 900 }
         },
-        // The real server: git sources from fixtures/histories, polling, SQLite, auth off.
+        // The real server: git sources built from fixtures/histories, polling, SQLite, auth off.
         "serve": {
           "type": "start_server",
-          "argv": ["cargo", "run", "--release", "--bin", "firelight", "--", "serve"],
+          "shell": "sh fixtures/histories/build.sh target/fixtures > /dev/null && exec cargo run --locked --release --bin firelight -- serve",
           "env": {
             "FIRELIGHT_CONFIG": "fixtures/veld/firelight.toml",
             "FIRELIGHT_SERVER_LISTEN": "127.0.0.1:${veld.port}",
             "FIRELIGHT_SERVER_PUBLIC_URL": "${veld.url}",
-            "FIRELIGHT_DATA_DIR": ".veld-data/firelight"
+            "FIRELIGHT_DATA_DIR": ".veld-data/firelight",
+            "FIRELIGHT_SOURCES": "[{\"id\":\"acme-infra\",\"kind\":\"git\",\"url\":\"file://${veld.root}/target/fixtures/acme-infra.git\"},{\"id\":\"acme-app\",\"kind\":\"git\",\"url\":\"file://${veld.root}/target/fixtures/acme-app.git\"}]"
           },
           "health_check": { "type": "http", "path": "/readyz", "expect_status": 200, "timeout_seconds": 900 }
         }
@@ -881,13 +880,13 @@ Same rule as maintenance-manager §26: verify, decide (simplest option that keep
 | D3 | Verifying downloads from Hugging Face (LFS sha256 and non-LFS git blob SHA-1 at a pinned revision; the exact download hosts, including Xet storage, for egress lists) | Check the API response for a sha256 per file; if it isn't there, require `FIRELIGHT_EMBED_SHA256` for non-default models |
 | D4 | CPU latency, memory and index time for the default model; dtype | Measure on a GitHub runner and a 2-vCPU container; set the budgets and chart resources |
 | D5 | Image base | distroless/cc unless D1 needs the git CLI; then a slim base whose git is ≥ 2.40 (Debian bookworm ships 2.39, so not bookworm's package). **M1:** `gcr.io/distroless/cc-debian12:nonroot` by digest, holding the prebuilt binary only (no `RUN`, so a two-platform build needs no emulation); Linux binaries build on ubuntu-22.04 (glibc 2.35) so they run on Debian 12's glibc 2.36 and on older hosts. Revisited with D1 in M3. **Settled (M3):** `cgr.dev/chainguard/git:latest-glibc` by digest (git 2.56, glibc, CA certificates, user 65532, amd64 + arm64), holding the prebuilt binary only, so the two-platform build still needs no emulation. The `image` job checks `git --version` in the image |
-| D6 | Browser test driver | Playwright (test-only Node) vs a Rust WebDriver/CDP crate; pick the one that runs axe reliably |
+| D6 | Browser test driver | Playwright (test-only Node) vs a Rust WebDriver/CDP crate; pick the one that runs axe reliably. **Settled (M4): Playwright** (`@playwright/test` 1.64.1, `@axe-core/playwright` 4.14.0) in `tests/browser/`: `package-lock.json` resolved with `npm install --before=<7 days ago>`, installed with `npm ci --ignore-scripts`, checked by `tools/depage` against the npm registry's dates, Dependabot `npm` with the 7-day cooldown. Rust WebDriver crates need a separate driver binary and have no maintained axe integration. Firelight itself needs no Node |
 | D7 | Dependency-age gate for crates | Port maintenance-manager's `depage` idea against crates.io publish dates, with `.github/fresh-deps.txt` exceptions. **Settled (bootstrap):** `tools/depage` (Rust, no dependencies, HTTP through `curl`) checks every crate a change adds to `Cargo.lock` against the crates.io sparse index's `pubtime` (entries without it predate the field, so they are old enough), the toolchain against Rust's release manifest `date`, and each binary tool's `released` date against its GitHub release. `scripts/dev/cargo-update.sh` resolves with cargo's `-Zmin-publish-age` (through `RUSTC_BOOTSTRAP`, for that one resolution) so new lockfiles only take versions ≥ 7 days old. Exceptions: `<name> <version> <expires> <reason>`, expiring ≤ 30 days after the head commit |
 | D8 | Maintained YAML crate | `serde_yaml` is unmaintained and `serde_yml` has a RustSec advisory: pick another maintained parser with line/column errors, and cap alias expansion (billion-laughs test). **Settled (M2):** `serde-saphyr` 2.0 (MIT/Apache-2.0, maintained): line/column on every error, `Spanned<T>` for positions, and a resource `Budget`; Firelight runs it far below the defaults (depth 24, 20,000 nodes, 64 anchors and aliases, 1 MiB of scalars, one document), so a billion-laughs document is refused (`yaml::tests::billion_laughs_is_refused`). `serde_yaml` and `serde_yml` are banned in `deny.toml` |
 | D9 | Version tool for Rust releases | Keep maintenance-manager's `svu`-style tag-only flow if it works without a Go toolchain; otherwise an equivalent. **Settled (M1):** `scripts/ci/next-version.sh`, POSIX sh over `git log`: releasable on `feat`, `fix` or a breaking change since the newest `v*` tag; feat → minor, fix → patch, breaking → minor below 1.0 and major from 1.0; first release v0.1.0. Tested against throwaway histories in `tools/harness` |
 | D10 | Rate limits for anonymous polling of public GitHub repos | Measure whether "no change" checks count against the limit; set the minimum poll interval for anonymous sources accordingly. **Settled (M3):** a "no change" check is `git ls-remote` over git's smart-HTTP protocol, not the REST API, so it doesn't count against the REST rate limit (60/h anonymous). The REST API is used only for GitHub App token exchange, about once per owner per hour. The default stays 120 s, with a 10 s minimum |
-| D11 | Wording, pitch, examples, page look | Your call: plain, warm, accessible, maintenance-manager's voice rules |
-| D12 | `veld.json` field names | Validate against Veld's published schema; fix the spec's example (§13.6) to match |
+| D11 | Wording, pitch, examples, page look | Your call: plain, warm, accessible, maintenance-manager's voice rules. **M4:** the page follows `web/CONTRACT.md`: system fonts, warm off-white and dark warm grey, the accent for focus, glow and active states (link text uses a darker mix for AA contrast), Lucide icons (ISC), cards in an auto-fill grid; axe finds nothing serious in light or dark, and nothing scrolls sideways at 375 px |
+| D12 | `veld.json` field names | Validate against Veld's published schema; fix the spec's example (§13.6) to match. **Settled (M4):** the example's field names were right for schema v3. Changes: `--locked` on every cargo call; the `serve` variant builds the fixture repos first (`shell`) and passes them as `FIRELIGHT_SOURCES` with `file://${veld.root}/target/fixtures/…`, because the TOML can't hold absolute paths. The `e2e` job validates `veld.json` against Veld's schema v3 (vendored in `tests/browser/`) with ajv. Driven by hand: `veld orchestrator start firelight:fixtures` serves the page over HTTPS |
 
 ## 27. Review decisions (so they don't get re-added)
 

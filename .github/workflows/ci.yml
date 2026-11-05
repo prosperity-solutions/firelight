@@ -267,6 +267,7 @@ jobs:
             static.rust-lang.org:443
             index.crates.io:443
             static.crates.io:443
+            registry.npmjs.org:443
             *.actions.githubusercontent.com:443
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -449,9 +450,73 @@ jobs:
             target
           key: cargo-image-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
 
+  e2e:
+    name: e2e
+    needs: gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read # checkout
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            static.rust-lang.org:443
+            index.crates.io:443
+            static.crates.io:443
+            github.com:443
+            release-assets.githubusercontent.com:443
+            objects.githubusercontent.com:443
+            nodejs.org:443
+            registry.npmjs.org:443
+            cdn.playwright.dev:443
+            # cdn.playwright.dev redirects browser downloads here.
+            storage.googleapis.com:443
+            playwright.download.prss.microsoft.com:443
+            *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            target
+          key: cargo-e2e-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: cargo-e2e-
+      - name: Build the binary
+        run: cargo build --locked --bin firelight
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.22.0 # the current LTS, pinned
+          package-manager-cache: false
+      - name: Install the test-only packages (no install scripts)
+        working-directory: tests/browser
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: veld.json matches Veld's schema (D12)
+        working-directory: tests/browser
+        run: node validate-veld.js
+      - name: Install Chromium for Playwright
+        working-directory: tests/browser
+        run: npx --no-install playwright install chromium
+      - name: Browser e2e (Playwright + axe)
+        working-directory: tests/browser
+        run: npx --no-install playwright test
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: github.event_name == 'push'
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            target
+          key: cargo-e2e-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+
   all-green:
     name: all-green
-    needs: [gate, commits, ship, workflows, lint, deps, test, chart, image]
+    needs: [gate, commits, ship, workflows, lint, deps, test, chart, image, e2e]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 2

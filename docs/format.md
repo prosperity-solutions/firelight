@@ -231,7 +231,7 @@ links:
 help: Only services the PR deployed exist.
 ```
 
-- An input `name` is lowercase letters, digits and `_`, starting with a letter.
+- An input `name` is lowercase letters, digits and `_`, starting with a letter. `s` and `format` are reserved: the `/i/<repo>/<id>` route reads them itself.
   Its `pattern` must be anchored (`^…$`) and is matched against the whole
   value; every value must match it before anything renders.
 - A URL starts with `https://` or `http://` and may use a `{name}` placeholder

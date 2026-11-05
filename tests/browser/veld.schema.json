@@ -1,0 +1,2037 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veld.oss.life.li/schema/v3/veld.schema.json",
+  "title": "Veld Project Configuration (v3)",
+  "description": "Any Veld config file. All top-level keys are optional except in the root config (veld.json or veld.jsonc \u2014 both are read; with both present veld.json wins and lint reports ambiguous-root-config), which must declare schemaVersion and name \u2014 so one schema covers the root file and every file it includes, and $schema autocompletion works in all of them.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Optional JSON Schema reference for editor autocompletion. Note: veld accepts JSONC (comments and trailing commas) in every config file, but editors validate a .json file with a strict JSON parser \u2014 name the root file veld.jsonc, or map veld.json to the 'jsonc' language in your editor, to stop spurious syntax errors."
+    },
+    "schemaVersion": {
+      "type": "string",
+      "const": "3",
+      "description": "Required in the root config file only. Must be \"3\" \u2014 v1 and v2 are not supported and fail to load. In v3 the `command` key is gone: every place that runs something uses `argv` (an array, spawned directly) or `shell` (a string, run via sh -c). See docs/migrating-to-v3.md to convert an older config."
+    },
+    "name": {
+      "type": "string",
+      "description": "Required in the root config file only. Human-readable project name, used in URLs and run history."
+    },
+    "include": {
+      "type": "array",
+      "description": "Globs of further config files to load, relative to this file's directory. Root config only \u2014 nested includes are refused, because load order (and so error messages) would depend on a graph nobody can see. Matches are loaded in sorted order. `*` matches within one path segment, `?` one character, `**` across segments.",
+      "items": {
+        "type": "string"
+      },
+      "examples": [
+        [
+          "veld.d/*.jsonc",
+          "apps/*/veld.node.json"
+        ]
+      ]
+    },
+    "url_template": {
+      "type": "string",
+      "description": "Hostname template for a long_running node's http ports. Uses {variable} \u2014 single braces \u2014 not ${variable}. {service} is the node name for its primary port and `<node>-<port>` for a secondary http port, so every hostname a node owns is a sibling at the same depth.",
+      "default": "{service}.{run}.{project}.localhost"
+    },
+    "vars": {
+      "type": "object",
+      "description": "One definition point per value, referenced as ${vars.<name>} at every use site. A var is a scalar or a single value source \u2014 never an object, never a config fragment: the key stays written in the node that uses it, so `rg <ENV_VAR>` still finds the line that sets it. A var may not reference another var (one hop, always). A literal may use the run-scoped built-ins (${veld.run}, run_id, name, project, root, worktree, branch, username); the per-node ones (port, url, url.*, ports.*, node, variant) are a lint error here, because a var is one value for the whole run \u2014 compose those at the use site. A var backed by a value source is resolved only when the resolved plan reaches it, so a credential helper behind a var costs nothing on a run that does not use it.",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/value"
+          },
+          {
+            "$ref": "#/$defs/machineVar"
+          }
+        ]
+      }
+    },
+    "env": {
+      "$ref": "#/$defs/envMap",
+      "description": "Project-wide environment variables, inherited by every node variant."
+    },
+    "presets": {
+      "type": "object",
+      "description": "Named selections for `veld orchestrator start --preset <name-or-key>`. An entry starting with @ references another preset, so overlapping sets need not repeat every selection. Cycles are an error. A preset is either a bare list of selections, or an object adding a stable picker key and the metadata a person or a coding agent needs to choose it.",
+      "additionalProperties": {
+        "$ref": "#/$defs/preset"
+      },
+      "examples": [
+        {
+          "core": [
+            "api:dev",
+            "web:dev"
+          ],
+          "ci": [
+            "@core",
+            "e2e:dev"
+          ],
+          "designer-preview": {
+            "key": 1,
+            "label": "Site preview (staging content)",
+            "when_to_use": "Reviewing visual changes against real CMS content. Not for API work.",
+            "group": "For non-developers",
+            "selections": [
+              "web:prod",
+              "api:staging"
+            ]
+          }
+        }
+      ]
+    },
+    "default_preset": {
+      "type": "string",
+      "description": "The preset `veld orchestrator start` runs when given nothing to start. Answers \"just start it\" — for a person pressing enter at the picker, and for a coding agent told to start the app — without a guess. Must name a preset defined in `presets`.",
+      "examples": [
+        "dev-local"
+      ]
+    },
+    "features": {
+      "$ref": "#/$defs/removedKey"
+    },
+    "client_log_levels": {
+      "$ref": "#/$defs/removedKey"
+    },
+    "proxy": {
+      "$ref": "#/$defs/proxy"
+    },
+    "sharing": {
+      "$ref": "#/$defs/sharing"
+    },
+    "setup": {
+      "type": "array",
+      "description": "Steps run sequentially before the dependency graph. A non-zero exit aborts startup.",
+      "items": {
+        "$ref": "#/$defs/lifecycleStep"
+      }
+    },
+    "teardown": {
+      "type": "array",
+      "description": "Steps run sequentially after all nodes stop. Best-effort: failures are logged, never blocking.",
+      "items": {
+        "$ref": "#/$defs/lifecycleStep"
+      }
+    },
+    "nodes": {
+      "type": "object",
+      "description": "The dependency graph. A node is defined in exactly one file \u2014 the same name in two files is an error naming both, which is what removes precedence rules for node bodies entirely.",
+      "additionalProperties": {
+        "$ref": "#/$defs/node"
+      }
+    },
+    "hooks": {
+      "type": "object",
+      "description": "RESERVED. Repo-declared lifecycle hooks keyed by event (worktree.created, project.created, run.stopped). Parsed and stored but NOT EXECUTED by this version of veld \u2014 `veld orchestrator lint` says so. Hooks are not nodes: no graph, no port, no probes. Repo-declared only, never from a fetched extension.",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/commandObject"
+        }
+      }
+    },
+    "trash_cleanup": {
+      "type": "object",
+      "description": "What Veld's trash cleanup does in this project. After the user's `worktree.trashCleanupHours` in the trash, a worktree's large gitignored files and folders are deleted (sizes from `worktree.trashCleanupMinFolderMB` / `worktree.trashCleanupMinFileMB`); this adds to that. `steps` run first, in the trashed worktree; then `paths` select untracked entries to delete whatever their size, gitignored or not. Nothing deletes a tracked file, and a folder holding its own .git is never touched. Read from the main checkout's config by default (`extensions.source`), and only from the root config file. Off when the user sets `worktree.trashCleanupHours` to 0.",
+      "additionalProperties": false,
+      "properties": {
+        "paths": {
+          "type": "array",
+          "description": "Glob patterns, relative to the worktree root: `*` and `?` never cross `/`, `**` does, matching is case-insensitive, and a pattern without `/` matches the name at any depth (`.next` finds `apps/web/.next`). A match covers everything under it, as a .gitignore line does; tracked files are never deleted. At most 64.",
+          "maxItems": 64,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "steps": {
+          "type": "array",
+          "maxItems": 16,
+          "description": "Commands run in the trashed worktree before anything is deleted \u2014 `docker compose down -v`, `cargo clean`. Five minutes each; a failure is noted and the cleanup goes on. `${veld.*}` offers what an IDE extension command does: root, worktree, branch, branch_raw (argv only), project, username.",
+          "items": {
+            "$ref": "#/$defs/lifecycleStep"
+          }
+        }
+      }
+    },
+    "ide": {
+      "type": "object",
+      "description": "Per-project settings for Veld's own IDE surfaces — Veld Desktop and the /ide view in a browser. `quicklinks`, `permissions`, `externalOrigins`, `panes`, `news` and the `git` subscope are rendered; every other key here is RESERVED — parsed and stored, but not rendered by this version, and `veld orchestrator lint` says so. Spelled `ui` while the whole key was reserved; renamed in the release that first gave it a meaning, so a config carrying the old spelling gets an unknown-top-level-key error naming the rename.",
+      "additionalProperties": true,
+      "properties": {
+        "quicklinks": {
+          "type": "array",
+          "description": "Project links that are not veld's own — staging, a dashboard, an internal wiki — offered behind a Bookmarks button on a browser pane's start page and on the new-pane chooser, where the list itself is the run's own URLs. Typing in the address bar still matches them inline. Versioned with the repo, so a teammate who clones it gets the same links.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["label", "url"],
+            "properties": {
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "description": "What the link is called."
+              },
+              "url": {
+                "type": "string",
+                "pattern": "^https?://",
+                "description": "An http:// or https:// URL. Other schemes are refused: a quicklink is a repo-controlled string that a click hands to the OS, and `vscode://` or `file://` would make a config file a launcher for whatever the machine has registered. Literal only — `${...}` is not interpolated here, because the start page is rendered with no run to resolve against."
+              }
+            }
+          },
+          "examples": [
+            [
+              { "label": "Staging", "url": "https://staging.example.com" },
+              { "label": "Grafana", "url": "https://grafana.internal" }
+            ]
+          ]
+        },
+        "externalOrigins": {
+          "type": "array",
+          "description": "Origins that must open in the user's SYSTEM browser rather than in a Veld browser pane. A URL a terminal produces — clicked in its output, or opened by a program running in it — normally becomes a pane beside that terminal; an origin listed here goes to the real browser instead. That matters for sign-ins: a pane has its own cookie jar, so an SSO or bank flow started in one begins from scratch. This list is UNIONED with the user's own `browser.externalOrigins` setting rather than replacing it — the project names the hosts its app's login goes through, and the user names theirs. Turning the whole feature off is the user's `terminal.openUrlsInApp` setting, not this key.",
+          "items": {
+            "type": "string",
+            "pattern": "^https?://(\\*\\.)?[^/?#@*]+(:([0-9]+|\\*))?$",
+            "description": "A bare origin, with exactly the grammar `ide.permissions[].origin` uses: scheme://host[:port], http or https, no path, a leading `*.` for any depth of subdomain (label-wise, so `evilokta.com` does not match `*.okta.com`, and `*.x` does not match `x` itself), `*` in the port position for any port, and an omitted port meaning the scheme's default port exactly. A wildcard over a single label (`*.com`) is refused.",
+            "examples": ["https://accounts.google.com", "https://*.okta.com", "https://login.microsoftonline.com"]
+          },
+          "examples": [
+            ["https://accounts.google.com", "https://*.okta.com"]
+          ]
+        },
+        "permissions": {
+          "type": "array",
+          "description": "Browser permissions this project pre-answers for web content shown in a Veld Desktop browser pane, so a dev server that needs geolocation or a camera works for everyone who clones the repo instead of prompting each of them. A permission a user answers by hand always wins over what is written here, and every grant from this file is shown — labelled as coming from veld.json — in the pane's per-site permission panel, where it can be revoked. Understand what you are granting: an entry for a remote origin hands that server's JavaScript a standing capability on the machine of anyone who opens it in a pane.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["origin"],
+            "properties": {
+              "origin": {
+                "type": "string",
+                "pattern": "^https?://(\\*\\.)?[^/?#@*]+(:([0-9]+|\\*))?$",
+                "description": "A bare origin: scheme://host[:port], http or https, no path. A leading `*.` on the host matches any subdomain at any depth — `https://*.veld.localhost:*` covers `website.my-run.veld.localhost` on any port (pair the two wildcards — an unprivileged install serves on 18443, and an omitted port means 443), which is the form to use for veld's own URLs because they carry the RUN NAME in the hostname and run names change. Matching is label-wise, so `evilveld.localhost` does not match, and `*.x` does not match `x` itself. A wildcard over a single label (`*.com`) is refused; `*.localhost` is allowed, since RFC 6761 pins it to loopback. The port may be `*` for 'any port', which is worth knowing because dev servers move; an OMITTED port means the scheme's default port (so `http://example.com` is port 80 exactly), not any port.",
+                "examples": ["https://*.veld.localhost:*", "http://localhost:*", "http://127.0.0.1:5173", "https://staging.example.com"]
+              },
+              "allow": {
+                "type": "array",
+                "description": "Permissions granted without prompting.",
+                "items": { "$ref": "#/$defs/permissionId" }
+              },
+              "deny": {
+                "type": "array",
+                "description": "Permissions refused without prompting. Wins over `allow` in the same rule and over any other matching rule, and is how a project withdraws something Veld allows by default — screen capture of a pane's own contents is the one such default.",
+                "items": { "$ref": "#/$defs/permissionId" }
+              }
+            }
+          },
+          "examples": [
+            [
+              { "origin": "http://localhost:*", "allow": ["geolocation", "clipboard-read"] },
+              { "origin": "https://staging.example.com", "deny": ["display-capture"] }
+            ]
+          ]
+        },
+        "extensions": {
+          "type": "array",
+          "description": "Badges, buttons and menus this project contributes to named places in the IDE chrome. Versioned with the repo, so a teammate who clones it gets the same ones. A `status` badge runs a command in the worktree and renders what it prints — the small contract is `{ text, tone, tooltip, href, actions }` on stdout, and a command that knows nothing about veld (`git rev-parse --short HEAD`) is already a working badge because a non-contract line becomes the text. Exiting 0 with no output means \"nothing to show here\" and the badge is absent; a non-zero exit renders it as failed with the tool's own message in the tooltip. An `action` is a button, a `menu` groups actions into one control. Provider-specific knowledge stays in the command: veld never learns a code host's name.",
+          "items": {
+            "$ref": "#/$defs/extension"
+          },
+          "maxItems": 24
+        },
+        "panes": {
+          "type": "array",
+          "description": "Extra pane types this project offers in Veld Desktop's pane menu — the + menu, the pane chooser, and the command palette. Versioned with the repo, so a teammate who clones it gets the same panes. A terminal pane runs its own command instead of a login shell, and may declare a `resume` command so the pane can pick the tool's own session back up after a reboot; see ${veld.pane.token}. The pane chooser shows every entry as an equal card in declaration order, beside veld's plain Terminal, each carrying its `description` under its label — so write one; nothing is promoted and there is no primary flag. An entry whose requires_bin is missing on the machine keeps its card, disabled, with the reason on that line.",
+          "items": { "$ref": "#/$defs/pane" },
+          "examples": [
+            [
+              {
+                "id": "claude",
+                "type": "terminal",
+                "label": "Claude",
+                "icon": "sparkles",
+                "requires_bin": ["claude"],
+                "argv": ["claude", "--session-id", "${veld.pane.token}"],
+                "resume": { "argv": ["claude", "--resume", "${veld.pane.token}"] }
+              }
+            ]
+          ]
+        },
+        "news": {
+          "type": "array",
+          "description": "Cards this project shows its own team in the Veld IDE, through the same channel Veld uses to announce its own changes. Merge a card with the change it describes; a teammate pulls, and the next time they open the IDE they are told once. Only news in the repo's MAIN checkout counts — the primary clone, at whatever it currently has checked out — so a card being drafted in a WORKTREE cannot prompt anybody until it lands, and five worktrees cannot show the same card five times. (A branch in the main clone itself is live: the isolation is per worktree, not per branch.) Reading a card clears it; dismissing it stops the prompt but keeps it counted, and everything is revisitable from What's new… in the project ⋯ menu. Write the OUTCOME, not the mechanism: the headline is what a teammate can now do, or stop doing. At most 5 items may be live at once — counted ACROSS `include` files, which `maxItems` here cannot express, so splitting news over two files can validate green in your editor and still drop the oldest card at load (`veld orchestrator lint` says which). Over the cap it is the entries with the oldest `since` that go — so an ordinary new card, dated today, survives; a BACKDATED addition can be the one dropped. RETIRING AN ITEM IS DELETING IT — the cap and the short field limits are what keep a surface that interrupts people worth being interrupted by. Items past the cap are dropped with a `veld orchestrator lint` warning, as is any malformed entry; nothing here can fail a config load.",
+          "maxItems": 5,
+          "items": { "$ref": "#/$defs/newsItem" },
+          "examples": [
+            [
+              {
+                "id": "one-command-tests",
+                "since": "2026-08-12",
+                "eyebrow": "Heads up",
+                "headline": "Stop guessing which test script works",
+                "body": "The wrappers are gone — `just test` runs everything, and your old local alias is the one thing that will still fail today.",
+                "glyph": "terminal"
+              }
+            ]
+          ]
+        },
+        "git": {
+          "type": "object",
+          "description": "Per-project knobs for Veld's git-powered IDE surfaces. Only the keys below are interpreted; other keys here are RESERVED (parsed and stored, not rendered).",
+          "additionalProperties": true,
+          "properties": {
+            "stalenessSensitivity": {
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 10,
+              "default": 1,
+              "description": "How sensitively the IDE's worktree-staleness indicator (the \"update main\" pill in the top bar) is coloured. A multiplier on the severity curve: 1 is the baseline — a single commit a week old, or fifty commits in a day, both read as urgent (red); 2 halves those thresholds (a 3.5-day-old commit or 25 commits read red); 0.5 halves the sensitivity. Tune it up on a fast-moving trunk, down where worktrees naturally drift. Values outside 0.1–10 are clamped; a non-number falls back to 1.",
+              "examples": [2]
+            }
+          }
+        },
+        "outfit": {
+          "description": "How new worktrees pick an outfit (https://outfit.oss.life.li) profile. Veld offers profiles only when outfit is in play on the machine: the `outfit` binary on the user's PATH and at least one committed or local profile besides `base`. Then the create dialog shows an outfit picker, the top bar shows and switches the worktree's profile, and `veld ide worktree new` must be told `--outfit <profile>` unless `required` is false. `false` makes Veld leave outfit alone in this project.",
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "required": {
+                  "type": "boolean",
+                  "default": true,
+                  "description": "Whether `veld ide worktree new` must name a profile (`--outfit base` is a valid choice). When false, a create without `--outfit` gets `default`, or follows the clone's own profile when there is no `default`."
+                },
+                "default": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The profile the create dialog preselects, and the one a CLI create gets when `required` is false and no `--outfit` was given."
+                }
+              }
+            }
+          ],
+          "examples": [false, { "required": false, "default": "base" }]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "newsItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "since", "eyebrow", "headline", "body"],
+      "description": "One card. The field set is closed and short on purpose — a headline and one sentence, with a mark beside it. There is no link, no CTA and no Markdown: the limit is what stops an interrupting surface becoming a wall of prose, which is the only thing that keeps it worth interrupting for. If a change genuinely needs more room, say the outcome here and let the reader find the detail where detail belongs.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+          "maxLength": 64,
+          "description": "A kebab-case slug, stable forever, unique within this project. It is what each teammate's own read/dismissed state is stored against — so NEVER RENAME ONE (a rename re-shows the card to the whole team) and NEVER REUSE A RETIRED ONE (the new card is suppressed for everyone who saw the old one). Both failures are silent. It is namespaced per project before it is stored, so another repo shipping the same slug is not a collision.",
+          "examples": ["one-command-tests"]
+        },
+        "since": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$",
+          "description": "The day this was written, YYYY-MM-DD. REQUIRED, shown on every card, and it GATES: a teammate who imported this project after that day never sees the card, so cloning a repo with a year of history never means a stack of modals about changes that predate them. That is also what makes an item nobody deleted stop reaching people. There is deliberately no default — a defaulted date would gate the card wrongly and silently. Compared as a UTC day, and strictly BEFORE the import day, so a card written today still reaches somebody who joined this morning. A day in the FUTURE is refused with a `veld orchestrator lint` warning and the card is dropped: it would be after every arrival forever, so nothing would ever retire it — and a transposed year is one keystroke.",
+          "examples": ["2026-08-12"]
+        },
+        "eyebrow": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24,
+          "description": "Two or three words above the headline.",
+          "examples": ["Heads up"]
+        },
+        "headline": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 44,
+          "description": "What a teammate can now DO, or stop doing — in their words, not the implementation's. Never open with the project name, a feature name, or a list of options: that is documentation, and the docs already have it. The check: if the sentence would still read as true to somebody who will never touch this part of the repo, it is describing the change instead of their day.",
+          "examples": ["Stop guessing which test script works"]
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "description": "One sentence on what changes about their day, and only then where to look. Not two sentences, and not a changelog entry with nicer type.",
+          "examples": ["The wrappers are gone — `just test` runs everything, and your old local alias is the one thing that will still fail today."]
+        },
+        "glyph": {
+          "type": "string",
+          "enum": ["terminal", "panes", "device", "inbox"],
+          "default": "inbox",
+          "description": "The line-art mark beside the eyebrow, drawn in the current text colour. A closed set of four, deliberately much smaller than the pane icon list: a card is one sentence with a mark, and the set staying small is what keeps a project's card looking like it belongs beside Veld's own rather than pasted in. Prefer the closest fit over asking for a new one."
+        }
+      }
+    },
+    "paneIconName": {
+      "type": "string",
+      "description": "A Tabler icon name (tabler.io/icons), the icon set every built-in pane tab uses. An allowlist rather than any Tabler name, because the UI imports each icon component statically — a name resolved at runtime would either pull the whole set into the bundle or render nothing. Use an emoji for anything not listed.",
+      "enum": [
+        "alert-triangle",
+        "app-window",
+        "atom",
+        "ban",
+        "bolt",
+        "book",
+        "brain",
+        "brand-docker",
+        "brand-github",
+        "brand-gitlab",
+        "brand-slack",
+        "brand-vscode",
+        "browser",
+        "bug",
+        "bulb",
+        "chart-line",
+        "check",
+        "circle-check",
+        "circle-dashed",
+        "circle-x",
+        "clock",
+        "cloud",
+        "cloud-upload",
+        "code",
+        "coin",
+        "compass",
+        "cpu",
+        "database",
+        "device-desktop",
+        "download",
+        "external-link",
+        "eye",
+        "file-code",
+        "flag",
+        "flask",
+        "folder",
+        "gauge",
+        "git-branch",
+        "git-commit",
+        "git-merge",
+        "git-pull-request",
+        "help-circle",
+        "history",
+        "hourglass",
+        "info-circle",
+        "key",
+        "link",
+        "list-check",
+        "lock",
+        "lock-open",
+        "mail",
+        "map",
+        "message-chatbot",
+        "notebook",
+        "package",
+        "palette",
+        "player-pause",
+        "player-play",
+        "plug",
+        "puzzle",
+        "refresh",
+        "robot",
+        "rocket",
+        "search",
+        "server",
+        "shield",
+        "shield-check",
+        "sparkles",
+        "star",
+        "tag",
+        "terminal",
+        "terminal-2",
+        "tool",
+        "trending-down",
+        "trending-up",
+        "upload",
+        "user",
+        "users",
+        "wand",
+        "x"
+      ]
+    },
+    "paneIcon": {
+      "description": "How the pane's tab is illustrated: a name from the Tabler allowlist, or any non-ASCII string (an emoji), rendered as text. ASCII means \"this is a name\", so a misspelled one is a lint problem rather than a tab labelled `sparkle`.",
+      "anyOf": [
+        { "$ref": "#/$defs/paneIconName" },
+        {
+          "type": "string",
+          "pattern": "[^\\u0000-\\u007F]",
+          "description": "An emoji, or any other non-ASCII string."
+        }
+      ]
+    },
+    "pane": {
+      "description": "One pane type this project adds to Veld Desktop's pane menu.",
+      "type": "object",
+      "required": ["id", "type"],
+      "properties": {
+        "argv": { "$ref": "#/$defs/argv" },
+        "shell": {
+          "type": "string",
+          "description": "Run via sh -c; you own the quoting."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["type"],
+            "properties": { "type": { "const": "terminal" } }
+          },
+          "then": {
+            "additionalProperties": false,
+            "required": ["id", "type"],
+            "oneOf": [{ "required": ["argv"] }, { "required": ["shell"] }],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "description": "Stable id, unique within the project. Names the pane on the wire and in ${veld.pane.id}; never shown to the user — that is `label`."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["terminal"],
+                "description": "What kind of pane this is. Only `terminal` exists today; the discriminator is required so a future type is additive rather than a reshape. A type this veld does not know is skipped with a lint problem, and the rest of `ide.panes` still applies — so a config written for a newer veld costs the pane it names, not the whole block."
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Menu and tab text. Defaults to `id`."
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1,
+                "description": "One line shown in the pane menu and as the tab's tooltip."
+              },
+              "icon": { "$ref": "#/$defs/paneIcon" },
+              "requires_bin": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1, "pattern": "^[^/\\\\]+$" },
+                "description": "Executable names that must be on the user's PATH for this pane to be offered. Names, never paths — a path would pass or fail on one machine's layout. Absent or empty means always offered. Resolved by a PATH lookup, never by running anything: veld does not execute a config command to decide whether THIS pane is offered. (`sessions` below is the single place a pane runs a project command before you click anything, and what it decides is which session THIS pane opens on — never whether the pane is offered.)"
+              },
+              "argv": { "$ref": "#/$defs/argv" },
+              "shell": {
+                "type": "string",
+                "description": "Run via sh -c; you own the quoting."
+              },
+              "sessions": {
+                "type": "object",
+                "additionalProperties": false,
+                "oneOf": [{ "required": ["argv"] }, { "required": ["shell"] }],
+                "description": "How this pane offers sessions it did NOT start — the ones the tool already has lying around for this worktree. veld runs this command when the pane chooser is on screen and, by default, asks which session you want the moment you click the pane — starting fresh is the first row. It launches the pane's own `resume` against the one you pick, with ${veld.pane.token} set to it. So a picked value never becomes a command: it only chooses which session the command you already declared runs against. Requires `resume`, and that `resume` must reference ${veld.pane.token} — without either the pick has nowhere to go, and `veld orchestrator lint` says so and drops the picker. STDOUT CONTRACT: one row per line, `value`, then optionally a TAB and the text to show, then optionally a second TAB and a quieter detail line. `ls -t ~/.claude/projects/$slug/*.jsonl | xargs -n1 basename -s .jsonl` is a working picker with no adapter at all. Exit 0 with NO output means there are none here and the pane simply does not offer the choice — the answer a fresh clone gives. A non-zero exit offers the choice and says it failed, with the stderr tail. A row whose value is not 1-128 characters of letters, digits, `.`, `_`, `-`, `:`, `@` or `/`, beginning with a letter or digit and containing no `..`, is dropped — that set keeps the value inert inside a `shell` command, stops a leading `-` being read as a flag, and stops a `..` reaching a tool that resolves the id against its own transcripts directory. At most 50 rows are shown. THE COMMAND RUNS WITHOUT YOU CLICKING THE PANE — once, while the pane chooser is on screen, never on a timer — so it sits under the same posture and the same machine-wide off switch as `ide.extensions`: Settings, run project commands automatically.",
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "What the picker's dialog is titled, and what its button says when `ask_first` is false. Defaults to \"Resume an earlier session…\"."
+                  },
+                  "ask_first": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Whether clicking the pane opens the picker instead of starting fresh. TRUE by default, and the default is the point: a picker behind a small control is one most people never find, and \"you already have a conversation about this worktree\" is exactly what somebody needs told BEFORE they start a second one. Starting fresh is then the first row of the dialog, so it is still one extra click and never a dead end. It only ever asks when there is something to ask about — a lister that found nothing opens the pane exactly as it always did, with no dialog. Set false for a project whose panes are usually a fresh start: the click launches, and the list moves to a button on the card."
+                  },
+                  "argv": { "$ref": "#/$defs/argv" },
+                  "shell": {
+                    "type": "string",
+                    "description": "Run via sh -c; you own the quoting."
+                  }
+                },
+                "examples": [
+                  {
+                    "label": "Resume an earlier Claude session",
+                    "argv": ["scripts/veld/claude-sessions.sh"]
+                  },
+                  {
+                    "label": "Earlier sessions",
+                    "argv": ["scripts/veld/claude-sessions.sh"],
+                    "ask_first": false
+                  }
+                ]
+              },
+              "resume": {
+                "$ref": "#/$defs/commandObject",
+                "description": "What to run instead of `argv`/`shell` when the pane is restored and its shell is gone — typically the tool's own resume flag with ${veld.pane.token}. Absent means the pane can only ever start fresh. A resume that fails is never silently retried as a fresh launch: that would start a new billable session and present to the user as data loss."
+              },
+              "agent": {
+                "type": "boolean",
+                "description": "Whether this pane is a coding agent \u2014 a program that takes a prompt and works on it. The IDE's New worktree dialog offers the project's agents and types your prompt into the one you pick; nothing else reads this. Absent is the useful state: the answer is then inferred from `resume`, because a pane that can pick its session up again is one holding a conversation, while a pane that cannot (a `git log`, a `tail -f`) is one where a typed prompt would be run as a command or lost with the pane. Set it only where that inference is wrong \u2014 `true` for an agent with no resume flag, `false` to keep a resumable pane out of the picker."
+              },
+              "auto_resume": {
+                "type": "boolean",
+                "default": false,
+                "description": "Run `resume` without asking when the pane is restored with its shell already gone — after a reboot, or after the detach grace reaped it. It never fires while you are watching the pane: an exit you saw always waits for a click. Defaults to false, and is ignored (with a lint problem) without a `resume` command, because these commands launch coding agents and an unattended one spends money and runs tools with nobody watching."
+              },
+              "close_on_exit": {
+                "type": "boolean",
+                "default": true,
+                "description": "Close the pane when its command exits cleanly (status 0) — what a terminal emulator does, and what quitting the tool usually means. Only ever fires on an exit somebody was there to see, so it never competes with `auto_resume`: a reboot, a quit app or a reaped session leave the pane to be restored from the layout instead. A NON-ZERO exit never closes the pane, whatever this says — the reason a tool died is printed on the screen it dies on, and a pane that disappears with it takes the error with it."
+              },
+              "fixed_label": {
+                "type": "boolean",
+                "default": false,
+                "description": "Pin the tab to this pane's `label`, ignoring any terminal title (OSC 0/2) the process inside it sets. Defaults to false, so a pane adopts its process's title exactly as a plain terminal (a login shell) always has — for a coding agent that title is what it is working on, and a rail of four identically-labelled panes tells you nothing. Set it for a pane whose `label` is a navigation landmark worth more than whatever the tool would call itself. The pane's identity is unaffected either way: ${veld.pane.id} and ${veld.pane.label} stay what the config says, and the tab returns to `label` on reload."
+              }
+            }
+          }
+        }
+      ]
+    },
+    "extension": {
+      "description": "One badge, button or menu this project contributes to the IDE chrome. What it does is keyed by the `type` discriminator. NOTE: like `$defs.pane`, the per-type key checking lives in `if`/`then` branches with no `else`, so an entry whose `type` matches none of them is not validated here at all — that is deliberate, so a config written for a newer veld with more types is not red-squiggled wholesale, and the cost is that a *typo* in `type` passes the schema silently. `veld orchestrator lint` is what catches it: the parser reports an unknown type, names the ones this version renders, and skips that entry while the rest of `ide.extensions` still applies.",
+      "type": "object",
+      "required": [
+        "id",
+        "type"
+      ],
+      "properties": {
+        "argv": {
+          "$ref": "#/$defs/argv"
+        },
+        "shell": {
+          "type": "string",
+          "description": "Run via sh -c; you own the quoting."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "const": "status"
+              }
+            }
+          },
+          "then": {
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "type",
+              "slot"
+            ],
+            "properties": {
+              "align": {
+                "type": "string",
+                "enum": [
+                  "start",
+                  "end"
+                ],
+                "default": "start",
+                "description": "Which side of the slot to sit on. The top bar's convention is that the left cluster is what this project does and the right is what the app does, so a project's extensions default to `start`; use `end` for something that reads as app chrome."
+              },
+              "argv": {
+                "$ref": "#/$defs/argv"
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1,
+                "description": "One line used as the control's tooltip."
+              },
+              "hint": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "text"
+                ],
+                "description": "What to tell someone whose machine is missing this extension's tool. Shown when `when_missing` is `hint`.",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "One sentence: what to install, and why it is worth it."
+                  },
+                  "href": {
+                    "type": "string",
+                    "pattern": "^https?://",
+                    "description": "Where to go to fix it — an install page. http(s) only, for the reason `ide.quicklinks` is restricted the same way: a click hands this to the OS."
+                  }
+                }
+              },
+              "icon": {
+                "$ref": "#/$defs/paneIcon"
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "description": "Stable id, unique among this project's extensions. Names the extension on the wire, in a menu's `items`, and in the `actions` a status extension prints. Never shown to the user — that is `label`."
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The text or tooltip the user sees. Defaults to `id`."
+              },
+              "open_in": {
+                "type": "string",
+                "enum": [
+                  "system",
+                  "pane"
+                ],
+                "default": "system",
+                "description": "Where the badge's `href` opens. `system` (the default) is your own browser, because a badge's link is normally a provider's page — a pull request, a CI run — where you are already signed in, and a Veld browser pane has its own separate cookie jar. Use `pane` for a link into something local. The badge's own output may override this per value."
+              },
+              "display": {
+                "type": "string",
+                "enum": [
+                  "text",
+                  "icon"
+                ],
+                "default": "text",
+                "description": "How the badge renders. `text` (the default) is a label, with the glyph — if any — beside it. `icon` renders the glyph alone as the whole badge, with the label kept as the accessible name and the tooltip's fallback rather than shown. Falls back to `text` if there is no glyph to show — from this value's own `icon`, or the declared one. The badge's own output may override this per value, the same as `open_in`."
+              },
+              "refresh_seconds": {
+                "type": "integer",
+                "minimum": 15,
+                "default": 60,
+                "description": "How often the badge is re-evaluated, in seconds. Floored at 15 — the cost bound belongs to veld rather than to a file in a repo, and a value below the floor is clamped with a lint problem so the effective value is never a surprise. Veld only ever evaluates the worktree you are looking at, and only while a window is open."
+              },
+              "requires_bin": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "description": "Executables that must be on your PATH for this extension to work, looked up by name (not a path). Empty or absent means always available. What an unavailable extension looks like is `when_missing`."
+              },
+              "shell": {
+                "type": "string",
+                "description": "Run via sh -c; you own the quoting."
+              },
+              "slot": {
+                "type": "string",
+                "enum": [
+                  "topBar"
+                ],
+                "description": "The named place this renders in. Omit it on an `action` to declare one that is *only* reachable by reference — from a menu's `items`, or from a status extension's `actions` — which is how a project offers five editors without putting five buttons in the bar. Required for `status` and `menu`, which nothing can reference."
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "status",
+                  "action",
+                  "menu"
+                ],
+                "description": "What kind of extension this is. `status` is a badge backed by a command Veld re-runs on a timer; `action` is a button that runs a command on a click; `menu` groups actions into one control. A type this veld does not know is skipped with a lint problem and the rest of `ide.extensions` still applies, so a config written for a newer veld costs the entry it names, not the whole block."
+              },
+              "when_missing": {
+                "type": "string",
+                "enum": [
+                  "hide",
+                  "disable",
+                  "hint"
+                ],
+                "default": "hint",
+                "description": "What an extension whose `requires_bin` is missing looks like. `hint` (the default) renders it greyed with your `hint` text, which is how a fresh clone tells a newcomer what the project expects them to install; `disable` greys it with just the missing tool named; `hide` removes it, for optional tooling nobody should be nagged about. An explicit value here wins over the user's \"hide disabled actions\" preference — that setting is about veld's own inapplicable actions, and it must not delete a project's setup instructions."
+              }
+            },
+            "oneOf": [
+              {
+                "required": [
+                  "argv"
+                ]
+              },
+              {
+                "required": [
+                  "shell"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "const": "action"
+              }
+            }
+          },
+          "then": {
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "type"
+            ],
+            "properties": {
+              "accepts": {
+                "type": "string",
+                "enum": [
+                  "file"
+                ],
+                "description": "Click-time context this action is offered with, instead of being a button that runs with none. `file` puts it on a file path clicked in terminal output, and hands the command the file's absolute path as `$1` and its line number as `$2` — positional parameters, not `${veld.*}` variables, because the path comes from whatever printed it and so must not be interpolated into a shell string (the same hazard that makes `${veld.branch_raw}` argv-only). Quote them: \"$1\", since a checkout path can contain spaces. Write `$1`, not `${1}`, which collides with Veld's own interpolation. Veld canonicalizes the path and refuses one outside the worktree before running anything. Cannot be combined with `slot`: a control in a slot is clicked with no file selected."
+              },
+              "align": {
+                "type": "string",
+                "enum": [
+                  "start",
+                  "end"
+                ],
+                "default": "start",
+                "description": "Which side of the slot to sit on. The top bar's convention is that the left cluster is what this project does and the right is what the app does, so a project's extensions default to `start`; use `end` for something that reads as app chrome."
+              },
+              "argv": {
+                "$ref": "#/$defs/argv"
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1,
+                "description": "One line used as the control's tooltip."
+              },
+              "hint": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "text"
+                ],
+                "description": "What to tell someone whose machine is missing this extension's tool. Shown when `when_missing` is `hint`.",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "One sentence: what to install, and why it is worth it."
+                  },
+                  "href": {
+                    "type": "string",
+                    "pattern": "^https?://",
+                    "description": "Where to go to fix it — an install page. http(s) only, for the reason `ide.quicklinks` is restricted the same way: a click hands this to the OS."
+                  }
+                }
+              },
+              "icon": {
+                "$ref": "#/$defs/paneIcon"
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "description": "Stable id, unique among this project's extensions. Names the extension on the wire, in a menu's `items`, and in the `actions` a status extension prints. Never shown to the user — that is `label`."
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The text or tooltip the user sees. Defaults to `id`."
+              },
+              "requires_bin": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "description": "Executables that must be on your PATH for this extension to work, looked up by name (not a path). Empty or absent means always available. What an unavailable extension looks like is `when_missing`."
+              },
+              "shell": {
+                "type": "string",
+                "description": "Run via sh -c; you own the quoting."
+              },
+              "slot": {
+                "type": "string",
+                "enum": [
+                  "topBar"
+                ],
+                "description": "The named place this renders in. Omit it on an `action` to declare one that is *only* reachable by reference — from a menu's `items`, or from a status extension's `actions` — which is how a project offers five editors without putting five buttons in the bar. Required for `status` and `menu`, which nothing can reference."
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "status",
+                  "action",
+                  "menu"
+                ],
+                "description": "What kind of extension this is. `status` is a badge backed by a command Veld re-runs on a timer; `action` is a button that runs a command on a click; `menu` groups actions into one control. A type this veld does not know is skipped with a lint problem and the rest of `ide.extensions` still applies, so a config written for a newer veld costs the entry it names, not the whole block."
+              },
+              "when_missing": {
+                "type": "string",
+                "enum": [
+                  "hide",
+                  "disable",
+                  "hint"
+                ],
+                "default": "hint",
+                "description": "What an extension whose `requires_bin` is missing looks like. `hint` (the default) renders it greyed with your `hint` text, which is how a fresh clone tells a newcomer what the project expects them to install; `disable` greys it with just the missing tool named; `hide` removes it, for optional tooling nobody should be nagged about. An explicit value here wins over the user's \"hide disabled actions\" preference — that setting is about veld's own inapplicable actions, and it must not delete a project's setup instructions."
+              }
+            },
+            "oneOf": [
+              {
+                "required": [
+                  "argv"
+                ]
+              },
+              {
+                "required": [
+                  "shell"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "const": "menu"
+              }
+            }
+          },
+          "then": {
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "type",
+              "slot",
+              "items"
+            ],
+            "properties": {
+              "align": {
+                "type": "string",
+                "enum": [
+                  "start",
+                  "end"
+                ],
+                "default": "start",
+                "description": "Which side of the slot to sit on. The top bar's convention is that the left cluster is what this project does and the right is what the app does, so a project's extensions default to `start`; use `end` for something that reads as app chrome."
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1,
+                "description": "One line used as the control's tooltip."
+              },
+              "hint": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "text"
+                ],
+                "description": "What to tell someone whose machine is missing this extension's tool. Shown when `when_missing` is `hint`.",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "One sentence: what to install, and why it is worth it."
+                  },
+                  "href": {
+                    "type": "string",
+                    "pattern": "^https?://",
+                    "description": "Where to go to fix it — an install page. http(s) only, for the reason `ide.quicklinks` is restricted the same way: a click hands this to the OS."
+                  }
+                }
+              },
+              "icon": {
+                "$ref": "#/$defs/paneIcon"
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "description": "Stable id, unique among this project's extensions. Names the extension on the wire, in a menu's `items`, and in the `actions` a status extension prints. Never shown to the user — that is `label`."
+              },
+              "items": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "description": "The ids of the `action` extensions this menu offers, in order. **Ids, not nested objects**: a member is a first-class declaration that veld orchestrator lint checks like any other, and referencing rather than nesting is what keeps a menu one level deep. An id that names nothing, or names something that is not an `action`, is dropped with a lint problem; a menu left with no usable members is dropped whole rather than rendering an empty popover."
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The text or tooltip the user sees. Defaults to `id`."
+              },
+              "requires_bin": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "description": "Executables that must be on your PATH for this extension to work, looked up by name (not a path). Empty or absent means always available. What an unavailable extension looks like is `when_missing`."
+              },
+              "slot": {
+                "type": "string",
+                "enum": [
+                  "topBar"
+                ],
+                "description": "The named place this renders in. Omit it on an `action` to declare one that is *only* reachable by reference — from a menu's `items`, or from a status extension's `actions` — which is how a project offers five editors without putting five buttons in the bar. Required for `status` and `menu`, which nothing can reference."
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "status",
+                  "action",
+                  "menu"
+                ],
+                "description": "What kind of extension this is. `status` is a badge backed by a command Veld re-runs on a timer; `action` is a button that runs a command on a click; `menu` groups actions into one control. A type this veld does not know is skipped with a lint problem and the rest of `ide.extensions` still applies, so a config written for a newer veld costs the entry it names, not the whole block."
+              },
+              "when_missing": {
+                "type": "string",
+                "enum": [
+                  "hide",
+                  "disable",
+                  "hint"
+                ],
+                "default": "hint",
+                "description": "What an extension whose `requires_bin` is missing looks like. `hint` (the default) renders it greyed with your `hint` text, which is how a fresh clone tells a newcomer what the project expects them to install; `disable` greys it with just the missing tool named; `hide` removes it, for optional tooling nobody should be nagged about. An explicit value here wins over the user's \"hide disabled actions\" preference — that setting is about veld's own inapplicable actions, and it must not delete a project's setup instructions."
+              }
+            }
+          }
+        }
+      ]
+    },
+    "permissionId": {
+      "type": "string",
+      "description": "A browser permission, in veld's spelling. These are veld's own ids rather than Electron's, and differ in one place on purpose: Electron's `media` covers camera and microphone together, while a per-site panel has to show them as the two separate switches every browser shows. Veld Desktop maps them back; a browser tab has no panes, so nothing here applies there.",
+      "enum": [
+        "camera",
+        "clipboard-read",
+        "clipboard-write",
+        "display-capture",
+        "file-system",
+        "fullscreen",
+        "geolocation",
+        "hid",
+        "idle-detection",
+        "keyboard-lock",
+        "microphone",
+        "midi",
+        "notifications",
+        "open-external",
+        "pointer-lock",
+        "protected-media",
+        "serial",
+        "speaker-selection",
+        "storage-access",
+        "usb",
+        "window-management"
+      ]
+    },
+    "value": {
+      "description": "A value: a plain string (a non-secret literal), or an object naming exactly one source plus an optional `secret` flag. veld never takes custody of a secret \u2014 it carries a pointer and a flag, resolves it at run start, and passes it to the process's environment or a file. Nothing here names a vendor: `argv` runs a command and reads stdout, and which command that is is your business.",
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "A non-secret literal."
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value"
+          ],
+          "properties": {
+            "value": {
+              "type": "string",
+              "description": "An inline literal. This object form exists so a literal can carry `secret: true`."
+            },
+            "secret": {
+              "$ref": "#/$defs/secretFlag"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "env"
+          ],
+          "properties": {
+            "env": {
+              "type": "string",
+              "description": "Read from the environment veld was launched with. Missing at start is an error naming the node and the variable."
+            },
+            "secret": {
+              "$ref": "#/$defs/secretFlag"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "file"
+          ],
+          "properties": {
+            "file": {
+              "type": "string",
+              "description": "Read the (trimmed) contents of a file. Relative to the project root."
+            },
+            "secret": {
+              "$ref": "#/$defs/secretFlag"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "argv"
+          ],
+          "properties": {
+            "argv": {
+              "$ref": "#/$defs/argv",
+              "description": "Run a command directly and take its trimmed stdout."
+            },
+            "secret": {
+              "$ref": "#/$defs/secretFlag"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "shell"
+          ],
+          "properties": {
+            "shell": {
+              "type": "string",
+              "description": "Run a shell command and take its trimmed stdout."
+            },
+            "secret": {
+              "$ref": "#/$defs/secretFlag"
+            }
+          }
+        }
+      ]
+    },
+    "preset": {
+      "description": "A preset: either a bare list of selections, or an object that adds a stable picker key and the metadata needed to choose it. Both forms are fully supported — the list form is right for a small config, and the object form is for configs whose preset list has grown past what anyone can identify at a glance.",
+      "oneOf": [
+        {
+          "type": "array",
+          "description": "Selections: `node:variant` entries and `@preset` references.",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "selections"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "selections": {
+              "type": "array",
+              "description": "Selections: `node:variant` entries and `@preset` references.",
+              "items": {
+                "type": "string"
+              }
+            },
+            "key": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4294967295,
+              "description": "The number shown beside this preset in the picker. Pinning it makes it permanent: it does not move when presets are added, removed, renamed, or regrouped, so it stays valid in someone's muscle memory, in a runbook, and in a message to a colleague. Presets without a key take the lowest unclaimed number, in declaration order — so appending a preset, or pinning one at the number it already shows, changes no other key; an unpinned key still moves when a preset is added or removed ahead of it, including from an include file that sorts earlier. `veld orchestrator presets --pin` prints the current numbering as a block to paste."
+            },
+            "label": {
+              "type": "string",
+              "description": "Human-readable name, shown in the picker and the desktop UI instead of the preset's config key."
+            },
+            "when_to_use": {
+              "type": "string",
+              "description": "When someone — or something — should pick this preset. Read by coding agents deciding what to start from a plain-English request, and by anyone who did not write the config. Say what it gives you and what it costs (start time, network, credentials)."
+            },
+            "group": {
+              "type": "string",
+              "description": "Optional heading to chunk the picker list under. Purely visual: groups are ordered by their lowest member key, so a group can move on screen but can never change a number. Presets with no group are collected under \"Other\"."
+            }
+          }
+        }
+      ]
+    },
+    "machineVar": {
+      "type": "object",
+      "description": "A var whose answer belongs to the MACHINE, not the repo. The declaration is committed and shared; the answer lives in veld's database and is set with `veld orchestrator vars set <name> <value>` (or in the management UI). Use it for values that are facts about the developer's computer rather than about the project — which of two installed container runtimes to run containers with, a memory ceiling that differs between a laptop and a workstation, the path to a locally installed tool. The answer is keyed per project across every worktree of the repo, so it is given once per machine and not once per checkout; `veld orchestrator vars set --worktree` narrows it to one checkout. Legal only inside `vars`, deliberately: an `env` map has no name for `veld orchestrator vars set` to address. If there is no `default`, every machine must answer — `veld orchestrator start` asks when it has a terminal and refuses with the exact command when it does not, and it never persists a value nobody chose.",
+      "additionalProperties": false,
+      "required": [
+        "machine"
+      ],
+      "properties": {
+        "machine": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "default": {
+              "$ref": "#/$defs/value",
+              "description": "The checked-in fallback used on a machine with no override. Omit to require every machine to answer. This is an ordinary value, so it may itself be a source (`{\"env\": \"CONTAINER_RUNTIME\"}`) — but it can never be another machine var, which is what keeps a var one hop from its value."
+            },
+            "choices": {
+              "type": "array",
+              "description": "The legal answers. Enforced when setting AND when resolving, because the config can change under an answer that was valid when it was stored. An empty array is a lint error — no value could satisfy it.",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            },
+            "description": {
+              "type": "string",
+              "description": "What the value means. Shown by `veld orchestrator vars list` and used as the prompt when no `prompt` is given."
+            },
+            "prompt": {
+              "type": "string",
+              "description": "The question asked when this machine has no answer and there is no default. Falls back to `description`."
+            }
+          }
+        },
+        "secret": {
+          "$ref": "#/$defs/secretFlag"
+        }
+      }
+    },
+    "secretFlag": {
+      "type": "boolean",
+      "description": "Declares the value sensitive: masked in output, encrypted at rest, scrubbed from the share payload, and REFUSED where veld would substitute it into an argv element or shell string — ${vars.x}, ${output.x}, ${nodes.a.x} (both positions appear in the process table). A bare $NAME is a WARNING (secret-shell-expansion), not an error: the shell expands it, so it leaks only when the expansion becomes another program's argument — PGPASSWORD=$DB_PASS psql … is safe, psql \"postgres://u:$DB_PASS@host/db\" is not, because the shell then execs psql with the password in its argv. Handing a container the name only, [\"docker\", \"run\", \"-e\", \"NAME\", \"img\"], is always safe. A secret's sanctioned destinations are the process environment and a file."
+    },
+    "envMap": {
+      "type": "object",
+      "description": "Environment variables. Additive across project \u2192 node \u2192 variant, with the most specific level winning per key; a level erases an inherited key by setting it to null.",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/value"
+          },
+          {
+            "type": "null",
+            "description": "Erase this key inherited from a less specific level."
+          }
+        ]
+      }
+    },
+    "argv": {
+      "type": "array",
+      "description": "An argument vector, spawned directly: no shell, no word splitting, no globbing. Interpolation runs per element after the array is fixed, so a value containing spaces, globs, quotes, or newlines can never change the argument count.",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "commandObject": {
+      "description": "Something to run: exactly one of `argv` or `shell`.",
+      "type": "object",
+      "oneOf": [
+        {
+          "required": [
+            "argv"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "argv": {
+              "$ref": "#/$defs/argv"
+            }
+          }
+        },
+        {
+          "required": [
+            "shell"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "shell": {
+              "type": "string",
+              "description": "Run via sh -c; you own the quoting. Permanently supported \u2014 any node that misbehaves under argv can be reverted to a string with no veld change and no config version change."
+            }
+          }
+        }
+      ]
+    },
+    "lifecycleStep": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Shown in progress output."
+        },
+        "argv": {
+          "$ref": "#/$defs/argv"
+        },
+        "shell": {
+          "type": "string"
+        },
+        "failureMessage": {
+          "type": "string",
+          "description": "Shown when the step exits non-zero. Useful for prerequisite checks."
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "argv"
+          ]
+        },
+        {
+          "required": [
+            "shell"
+          ]
+        }
+      ]
+    },
+    "portSpec": {
+      "description": "How a named port is obtained.",
+      "oneOf": [
+        {
+          "const": "auto",
+          "description": "veld allocates a free port."
+        },
+        {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "A fixed port. Discouraged: a literal port silently breaks parallel worktrees, which is the reason named auto-ports exist. veld will not substitute a different one if it is taken."
+        }
+      ]
+    },
+    "portEntry": {
+      "description": "One named port. The shorthand (\"auto\" or a number) is the port itself; the object form adds a protocol and an optional hostname override.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/portSpec"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "port"
+          ],
+          "properties": {
+            "port": {
+              "$ref": "#/$defs/portSpec"
+            },
+            "protocol": {
+              "type": "string",
+              "enum": [
+                "http",
+                "tcp"
+              ],
+              "description": "Every port gets a hostname and a DNS entry either way \u2014 naming and routing are separate concerns. `http` additionally gets a Caddy route, so it is reachable as a URL. `tcp` gets the name and nothing else: a raw TCP connection carries no hostname for a proxy to match on, so `db.myapp.test:5432` reaches the process directly with Caddy out of the path. On a .localhost domain the DNS entry is a no-op the helper skips (the OS already wildcards it); on a custom apex domain it is the only way a tcp port is addressable by name at all. Default: `http` for the primary port, `tcp` for every other \u2014 that asymmetry is what keeps an existing multi-port config from suddenly minting an HTTPS route in front of its debugger port."
+            },
+            "host": {
+              "type": "string",
+              "description": "Hostname template for this port, replacing `url_template` entirely. Speaks the same {single-brace} language \u2014 {service}, {variant}, {run}, {project}, {branch}, {worktree}, {username}, {hostname}, and the {a ?? b} fallback \u2014 NOT ${...}, which is the command/env language. Inside a `host`, {service} is the port's own label: the node name for a primary port, `<node>-<port>` for a secondary one. Applies to both protocols: an `http` port's Caddy route is registered under it, a `tcp` port's DNS entry is. The documented way out of a hostname collision \u2014 a node's secondary port is named `<node>-<port>.\u2026`, which can clash with a node actually named that."
+            },
+            "share": {
+              "$ref": "#/$defs/share",
+              "description": "Who this PORT may be exposed to. Consent lives on the port because that is where exposure happens \u2014 a node may offer its app port and withhold its ops console and its database. Absent means NOT SHARED, always. A node/variant-level `share` is shorthand for the primary port's policy and never spreads to the others; a port's own `share` replaces it. `\"expose\": [\"web\"]` requires `\"protocol\": \"http\"`, because the public gateway serves HTTP and a browser cannot speak a raw protocol through it."
+            }
+          }
+        }
+      ]
+    },
+    "portsMap": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[A-Za-z0-9_-]+$",
+        "description": "A port name becomes a DNS label (<node>-<port>.\u2026), an environment-variable suffix (VELD_PORT_<NAME>) and a segment of ${veld.ports.<name>} \u2014 so a dot, whitespace or `#` breaks one of those silently. `veld orchestrator lint` reports the same thing as `port-name`."
+      },
+      "description": "Named ports veld allocates, referenced as ${veld.ports.<name>} and exported as VELD_PORT_<NAME>. ${veld.port} remains the primary \u2014 the one named `http`, the sole entry, or the one explicitly marked `\"protocol\": \"http\"`. Every port gets its own hostname, ${veld.hosts.<name>} and VELD_HOST_<NAME>; the routed (http) ones additionally get ${veld.urls.<name>} and VELD_URL_<NAME>. Omit the key entirely for the historical behaviour (one allocated http port); set it to null for a long-running node that serves nothing.",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/portEntry"
+          },
+          {
+            "type": "null",
+            "description": "Erase an inherited port."
+          }
+        ]
+      },
+      "examples": [
+        {
+          "http": "auto",
+          "debug": "auto",
+          "metrics": "auto"
+        },
+        {
+          "http": "auto",
+          "admin": {
+            "port": "auto",
+            "protocol": "http"
+          },
+          "postgres": {
+            "port": 5432,
+            "protocol": "tcp"
+          }
+        }
+      ]
+    },
+    "filesMap": {
+      "type": "object",
+      "description": "Values delivered to disk before the process starts, for a program that can only read a file. Paths are relative to the project root; parent directories are created; the file is created WITH its mode (default 0600) rather than chmod-ed afterwards, so a credential is never briefly world-readable.",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A value plus an optional octal mode.",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "env": {
+                "type": "string"
+              },
+              "file": {
+                "type": "string"
+              },
+              "argv": {
+                "$ref": "#/$defs/argv"
+              },
+              "shell": {
+                "type": "string"
+              },
+              "secret": {
+                "$ref": "#/$defs/secretFlag"
+              },
+              "mode": {
+                "type": "string",
+                "pattern": "^0?[0-7]{3,4}$",
+                "description": "Octal file mode as a string, e.g. \"0600\". A string, not a number, because a bare number has already lost its leading zero.",
+                "default": "0600"
+              }
+            },
+            "additionalProperties": false,
+            "oneOf": [
+              {
+                "required": [
+                  "value"
+                ]
+              },
+              {
+                "required": [
+                  "env"
+                ]
+              },
+              {
+                "required": [
+                  "file"
+                ]
+              },
+              {
+                "required": [
+                  "argv"
+                ]
+              },
+              {
+                "required": [
+                  "shell"
+                ]
+              }
+            ]
+          },
+          {
+            "type": "null",
+            "description": "Erase an inherited file."
+          }
+        ]
+      }
+    },
+    "dependsOn": {
+      "type": "object",
+      "description": "Dependencies: node name \u2192 variant name. Both must be written LITERALLY \u2014 no ${\u2026}. The graph is read before any variable exists, so an interpolated dependency would need a two-stage evaluator. Additive over the node level; \"node\": null erases an inherited dependency.",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "stepType": {
+      "type": "string",
+      "enum": [
+        "command",
+        "bash",
+        "long_running",
+        "start_server"
+      ],
+      "description": "`command` runs to completion; `long_running` stays running. These are the only two primitives — the type describes lifecycle only. Whether a long-running node serves anything is a property of its `ports`: it gets one allocated port and a URL by default, and `\"ports\": null` declares a supervised process that serves nothing (an Electron shell, a watcher, a compiler). `start_server` is the historical spelling of `long_running` and remains a permanent alias, exactly as `bash` is for `command`; configs written either way load forever."
+    },
+    "removedKey": {
+      "deprecated": true,
+      "description": "No longer read: veld stopped injecting scripts into the pages it serves (#424). Accepted only so a config shared with older veld versions still validates; delete it once nobody on the project runs one."
+    },
+    "headerRules": {
+      "type": "object",
+      "properties": {
+        "remove": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "set": {
+          "type": "object",
+          "description": "Header name -> value. Plain strings only: these values travel to Caddy and to the public gateway as part of a route, so the value-source/`secret` forms are NOT yet supported here. Do not put a credential in a header value \u2014 see the follow-up noted in docs/configuration.md.",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "proxy": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Static header manipulation by the local proxy and the public gateway. Resolvable at project, node, and variant level: `remove` lists union case-insensitively, `set` maps override per key, and a header in both is resolved in favour of `set`.",
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/headerRules"
+        },
+        "response": {
+          "$ref": "#/$defs/headerRules"
+        }
+      }
+    },
+    "probe": {
+      "type": "object",
+      "description": "A readiness or liveness check. A variant REPLACES an inherited probe wholesale rather than merging into it \u2014 a probe is a tagged union, so field-wise merging would let a variant switch type from http to command and silently inherit a stale path.",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "http",
+            "port",
+            "command",
+            "settle"
+          ],
+          "description": "`settle` is READINESS ONLY, and is the probe for a long-running node that binds no port: it waits `seconds` and claims only that the process was still alive afterwards. Weak on purpose — but it is raced against process exit exactly as the port probe is, so a command that dies on startup still fails the run instead of letting dependents start behind a corpse. Prefer `command` whenever the process publishes something observable."
+        },
+        "seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 3,
+          "description": "How long a PORTLESS node's process must stay alive to count as ready. Named for type settle, where it is the whole check, but it sets the settle window for any readiness probe on a node with no port \u2014 that window is what races the process's own exit. Ignored where the node has a port, since readiness then waits for the listener."
+        },
+        "path": {
+          "type": "string",
+          "description": "For type http."
+        },
+        "expect_status": {
+          "type": "integer",
+          "description": "For type http. Default 200."
+        },
+        "port": {
+          "type": "string",
+          "description": "READINESS ONLY. Which named port from `ports` to check; default is the primary. A multi-port node's readiness is rarely 'any port is open' \u2014 a debugger port opens long before the app is listening. Not yet supported on a liveness probe, which always watches the primary port."
+        },
+        "argv": {
+          "$ref": "#/$defs/argv"
+        },
+        "shell": {
+          "type": "string"
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "default": 60
+        },
+        "interval_ms": {
+          "type": "integer",
+          "default": 1000
+        },
+        "failure_threshold": {
+          "type": "integer",
+          "description": "Liveness only: consecutive failures before recovery. Default 3."
+        },
+        "max_recoveries": {
+          "type": "integer",
+          "description": "Liveness only: recovery attempts before permanent failure. Default 3."
+        }
+      },
+      "required": [
+        "type"
+      ]
+    },
+    "probes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "readiness": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/probe"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Gates the dependency graph during startup. A start_server without one is reported healthy as soon as its port opens, so dependents start before it can serve. null erases an inherited probe."
+        },
+        "liveness": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/probe"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Runs continuously after the node is healthy; triggers recovery. null erases an inherited probe."
+        }
+      }
+    },
+    "outputs": {
+      "description": "Values this node publishes, referenced elsewhere as ${nodes.<node>.<KEY>}. A list declares names captured from the node's own output; a map publishes computed values (available on both node types \u2014 on a `command` node the map is interpolated after the command runs, with its captured outputs in scope, so a build step can say where its artifact landed). Replaced wholesale by a variant; null erases.",
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "share": {
+      "description": "Per-service sharing opt-in. Absent, or an empty `expose`, means this service can never be shared. Replaced wholesale by a variant rather than merged \u2014 sharing is a consent decision and a half-inherited expose list is exactly the surprise it must not have. null erases.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "expose": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "peer",
+                  "web"
+                ]
+              }
+            },
+            "web": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "access": {
+                  "type": "string",
+                  "enum": [
+                    "password",
+                    "link"
+                  ],
+                  "description": "Viewer access for the public URL. Default: password \u2014 never an open URL by accident."
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "action": {
+      "type": "object",
+      "description": "A user-invokable command on a node, exposed as `veld orchestrator action <name>` and as a dashboard button.",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "argv": {
+          "$ref": "#/$defs/argv"
+        },
+        "shell": {
+          "type": "string"
+        },
+        "parameters": {
+          "type": "object",
+          "description": "Static values available as ${param.KEY} and as environment variables. Plain strings only \u2014 the value-source/`secret` forms are not yet supported here.",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "requires_outputs": {
+          "type": "array",
+          "description": "Output keys that must all be present for this action to be available.",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "argv"
+          ]
+        },
+        {
+          "required": [
+            "shell"
+          ]
+        }
+      ]
+    },
+    "node": {
+      "type": "object",
+      "required": [
+        "variants"
+      ],
+      "description": "A node and its variants. Any variant field may be declared once here, at node level, and any variant may override it \u2014 this deduplicates VALUES, never structure: which keys a node has is still written in that node. There is no inheritance, no mixins, no templates.",
+      "properties": {
+        "default_variant": {
+          "type": "string"
+        },
+        "hidden": {
+          "type": "boolean",
+          "description": "Hide from `veld orchestrator nodes`. Still participates in the graph."
+        },
+        "url_template": {
+          "type": "string"
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/action"
+          }
+        },
+        "variants": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/variant"
+          }
+        },
+        "type": {
+          "$ref": "#/$defs/stepType"
+        },
+        "argv": {
+          "$ref": "#/$defs/argv"
+        },
+        "shell": {
+          "type": "string"
+        },
+        "cwd": {
+          "type": "string",
+          "description": "Relative to the PROJECT ROOT, not to the file that declares it."
+        },
+        "env": {
+          "$ref": "#/$defs/envMap"
+        },
+        "ports": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/portsMap"
+            },
+            {
+              "type": "null",
+              "description": "This node declares no ports: no allocation, no ${veld.port}, no URL, no Caddy route. How a long-running process that serves nothing (an Electron shell, a watcher, a compiler) opts out. Needs a readiness probe of type `command` or `settle`."
+            }
+          ]
+        },
+        "files": {
+          "$ref": "#/$defs/filesMap"
+        },
+        "depends_on": {
+          "$ref": "#/$defs/dependsOn"
+        },
+        "probes": {
+          "$ref": "#/$defs/probes"
+        },
+        "outputs": {
+          "$ref": "#/$defs/outputs"
+        },
+        "on_stop": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/commandObject"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Default teardown hook for every variant of this node, run in reverse dependency order whenever the run ends \u2014 a deliberate `veld orchestrator stop`, a node crash, a start that failed and aborted, or a run replaced by a new start. It runs at most once per teardown pass (two passes of one run can overlap, so write it idempotently), a failure or timeout is not retried, and it is killed after 30s so a wedged hook cannot stop the run from ending. A variant replaces it, or erases it with `\"on_stop\": null`. `null` here is simply equivalent to omitting the key \u2014 accepted because serde accepts it, and a schema stricter than the parser flags configs that load fine. It receives every ${veld.*} the node itself had, the URL family and named ports included, so a resource named after the same built-ins in argv and here cannot drift."
+        },
+        "share": {
+          "$ref": "#/$defs/share"
+        },
+        "features": {
+          "$ref": "#/$defs/removedKey"
+        },
+        "client_log_levels": {
+          "$ref": "#/$defs/removedKey"
+        },
+        "proxy": {
+          "$ref": "#/$defs/proxy"
+        }
+      },
+      "additionalProperties": false
+    },
+    "variant": {
+      "type": "object",
+      "description": "One way to run a node. `type` and the command may come from the node level instead. Exactly one of argv or shell.",
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/stepType"
+        },
+        "argv": {
+          "$ref": "#/$defs/argv"
+        },
+        "shell": {
+          "type": "string"
+        },
+        "script": {
+          "type": "string",
+          "description": "Path to a script file, relative to the project root. An alternative to argv/shell."
+        },
+        "cwd": {
+          "type": "string",
+          "description": "Relative to the PROJECT ROOT, not to the file that declares it."
+        },
+        "env": {
+          "$ref": "#/$defs/envMap"
+        },
+        "ports": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/portsMap"
+            },
+            {
+              "type": "null",
+              "description": "This node declares no ports: no allocation, no ${veld.port}, no URL, no Caddy route. How a long-running process that serves nothing (an Electron shell, a watcher, a compiler) opts out. Needs a readiness probe of type `command` or `settle`."
+            }
+          ]
+        },
+        "files": {
+          "$ref": "#/$defs/filesMap"
+        },
+        "depends_on": {
+          "$ref": "#/$defs/dependsOn"
+        },
+        "probes": {
+          "$ref": "#/$defs/probes"
+        },
+        "health_check": {
+          "$ref": "#/$defs/probe",
+          "description": "Deprecated alias for probes.readiness. Still accepted."
+        },
+        "outputs": {
+          "$ref": "#/$defs/outputs"
+        },
+        "sensitive_outputs": {
+          "type": "array",
+          "description": "Output keys whose values are sensitive: masked in display, encrypted at rest. Must all be declared in `outputs`.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "strict_outputs": {
+          "type": "boolean",
+          "default": true,
+          "description": "Fail if the command produces an output not declared in `outputs`. Cannot be null."
+        },
+        "skip_if": {
+          "$ref": "#/$defs/commandObject",
+          "description": "Idempotency check: skip this step if the command exits 0."
+        },
+        "on_stop": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/commandObject"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Teardown, run in reverse dependency order whenever the run ends \u2014 a deliberate `veld orchestrator stop`, a node crash, a start that failed and aborted, or a run replaced by a new start. It runs at most once per teardown pass (two passes of one run can overlap, so write it idempotently), a failure or timeout is not retried, and it is killed after 30s so a wedged hook cannot stop the run from ending. `null` erases a hook inherited from the node level (and nothing runs); omitting the key inherits it. It receives every ${veld.*} this variant had at start — for a start_server that includes ${veld.url}, ${veld.url.*} and ${veld.ports.*} — plus ${output.KEY} and ${vars.*}, so a resource named after the same built-ins in argv and here cannot drift."
+        },
+        "share": {
+          "$ref": "#/$defs/share"
+        },
+        "features": {
+          "$ref": "#/$defs/removedKey"
+        },
+        "client_log_levels": {
+          "$ref": "#/$defs/removedKey"
+        },
+        "proxy": {
+          "$ref": "#/$defs/proxy"
+        },
+        "url_template": {
+          "type": "string"
+        },
+        "verify": {
+          "$ref": "#/$defs/commandObject",
+          "description": "Deprecated alias for `skip_if`, still accepted. Prefer `skip_if`."
+        }
+      },
+      "additionalProperties": false
+    },
+    "secretSource": {
+      "description": "Where a token is read from. A plain string is a literal (convenient locally, but it lands in version control).",
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "required": [
+            "env"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "env": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "file"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "file": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "argv"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "argv": {
+              "$ref": "#/$defs/argv"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "shell"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "shell": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "sharing": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Environment-wide sharing policy. Relays must be opted into explicitly \u2014 including public \u2014 so nothing is routed over public relays by accident.",
+      "properties": {
+        "relays": {
+          "oneOf": [
+            {
+              "const": "public",
+              "description": "n0's public relay set."
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "description": "Self-hosted relays. Share traffic is confined to these.",
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "url"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                      "url": {
+                        "type": "string"
+                      },
+                      "token": {
+                        "$ref": "#/$defs/secretSource"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "gateway": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "required": [
+                "url"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "url": {
+                  "type": "string"
+                },
+                "token": {
+                  "$ref": "#/$defs/secretSource"
+                }
+              }
+            }
+          ]
+        },
+        "dangerouslyEmbedRelayTokensInTicket": {
+          "type": "boolean",
+          "description": "DANGER. Embeds the resolved relay token in every share link. Only for disposable, per-project tokens you rotate freely."
+        },
+        "peer_ttl_minutes": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 480,
+          "description": "How long this project's peer share links live, in minutes. Overrides the machine's `sharing.peerTtlMinutes` setting; `veld network share --ttl` overrides both for one share. Default 240. The daemon CLAMPS to this range rather than refusing, so a value outside it still loads and shares work — `veld orchestrator lint` warns (share-ttl-range) and names the value that will apply. Mirrors MIN/MAX_SHARE_TTL_MINUTES in veld-core."
+        },
+        "web_ttl_minutes": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 480,
+          "description": "How long this project's `--web` share links live, in minutes. Shorter than peer by default because the audience is the open internet. Overrides the machine's `sharing.webTtlMinutes` setting; `veld network share --ttl` overrides both. Default 120. Clamped, not refused, at the bounds above — `veld orchestrator lint` warns (share-ttl-range). Mirrors MIN/MAX_SHARE_TTL_MINUTES in veld-core."
+        }
+      }
+    }
+  }
+}

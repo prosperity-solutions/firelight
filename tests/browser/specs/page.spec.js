@@ -1,0 +1,131 @@
+// The page in a real browser (§13.3 "Browser"): no-JS rendering, ⌘K, Show me,
+// hiding, template islands, permalinks, themes, 375 px, and axe.
+const { test, expect } = require("@playwright/test");
+const AxeBuilder = require("@axe-core/playwright").default;
+
+test.describe("without JavaScript", () => {
+  test.use({ javaScriptEnabled: false });
+
+  test("the page, search and template islands work", async ({ page }) => {
+    await page.goto("/s/platform");
+    await expect(page.locator("section.island.cards h2", { hasText: "Environments" })).toBeVisible();
+    await expect(page.locator('a.link[data-ref="acme-app/errors"]')).toHaveAttribute("href", "https://errors.acme.example");
+    await page.fill("form.search input[name=q]", "admin rights");
+    await page.press("form.search input[name=q]", "Enter");
+    await expect(page.locator("ol.hits li a").first()).toHaveText("Request access rights");
+    await page.goto("/s/platform");
+    await page.fill('section.template input[name="pr"]', "4321");
+    await page.click("section.template button[type=submit]");
+    await expect(page.locator(".template-links a.link").first()).toHaveAttribute("href", "https://app-4321.preview.acme.example");
+  });
+});
+
+test("⌘K finds a guide and opens it at its section", async ({ page }) => {
+  await page.goto("/s/platform");
+  await page.keyboard.press(process.platform === "darwin" ? "Meta+k" : "Control+k");
+  const input = page.locator("#Palette input");
+  await expect(input).toBeFocused();
+  await input.fill("admin rights");
+  const first = page.locator("#Palette .results [role=option], #Palette .results li").first();
+  await expect(first).toContainText("Request access rights");
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/e\/acme-infra\/request-access/);
+  await expect(page.locator("h1")).toHaveText("Request access rights");
+});
+
+test("Show me scrolls to the link and makes it glow", async ({ page }) => {
+  await page.goto("/s/platform#acme-infra/argo-staging");
+  const link = page.locator('a.link[data-ref="acme-infra/argo-staging"]').first();
+  await expect(link).toHaveClass(/glow/);
+  await expect(link).toBeInViewport();
+});
+
+test("Shift+Enter on a link result shows where it is", async ({ page }) => {
+  await page.goto("/s/platform");
+  await page.keyboard.press(process.platform === "darwin" ? "Meta+k" : "Control+k");
+  await page.locator("#Palette input").fill("argo");
+  const options = page.locator("#Palette .results [role=option]");
+  await expect(options.first()).toBeVisible();
+  // Arrow down to the first link result.
+  const kinds = await options.evaluateAll((els) => els.map((e) => e.getAttribute("aria-keyshortcuts")));
+  const n = kinds.indexOf("Shift+Enter");
+  expect(n).toBeGreaterThanOrEqual(0);
+  for (let i = 0; i < n; i++) await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Shift+Enter");
+  await expect(page).toHaveURL(/\/s\/platform#acme-infra\/argo-/);
+  await expect(page.locator("a.link.glow").first()).toBeInViewport();
+});
+
+test("hide a card, reload, still hidden, unhide from the dialog", async ({ page }) => {
+  await page.goto("/s/platform");
+  await page.click('button[data-action="edit"]');
+  const card = page.locator('article.card[data-ref="acme-infra/environments/staging"]');
+  await card.locator("button.eye").first().click();
+  await page.click('button[data-action="edit"]');
+  await expect(card).toBeHidden();
+  await page.reload();
+  await expect(card).toBeHidden();
+  await expect(page.locator("button.hidden-count")).toBeVisible();
+  await page.click("button.hidden-count");
+  const dialog = page.locator("#Hidden");
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: /unhide|show/i }).first().click();
+  await page.keyboard.press("Escape");
+  await page.reload();
+  await expect(card).toBeVisible();
+});
+
+test("a template island fills live and refuses bad input", async ({ page }) => {
+  await page.goto("/s/platform");
+  const island = page.locator('section.template[data-ref="acme-app/previews"]');
+  await island.locator('input[name="pr"]').fill("1234");
+  await expect(island.locator(".template-links a.link").first()).toHaveAttribute("href", "https://app-1234.preview.acme.example");
+  await island.locator('input[name="pr"]').fill("../x");
+  await expect(island.locator(".template-error")).toBeVisible();
+  await expect(island.locator(".template-links a.link")).toHaveCount(0);
+});
+
+test("permalinks and heading anchors", async ({ page }) => {
+  await page.goto("/e/acme-infra/request-access#what-it-does-not-do");
+  const h = page.locator("h2#what-it-does-not-do");
+  await expect(h).toBeVisible();
+  await expect(h.locator("a.anchor")).toHaveAttribute("href", "#what-it-does-not-do");
+  await expect(page.locator(".prose a", { hasText: "the access model" })).toHaveAttribute("href", /\/e\/acme-infra\/access-model.*#what-it-is-not/);
+});
+
+for (const scheme of ["light", "dark"]) {
+  test(`${scheme} mode has no serious accessibility findings`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    for (const url of ["/s/platform", "/e/acme-infra/request-access", "/s/all"]) {
+      await page.goto(url);
+      const result = await new AxeBuilder({ page }).analyze();
+      const serious = result.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
+      expect(serious.map((v) => `${url}: ${v.id} ${v.help} (${v.nodes.length})`)).toEqual([]);
+    }
+    // And with the search open, showing a guide and a link.
+    await page.goto("/s/platform");
+    await page.keyboard.press(process.platform === "darwin" ? "Meta+k" : "Control+k");
+    await page.locator("#Palette input").fill("access");
+    await expect(page.locator("#Palette .show-me").first()).toBeVisible();
+    const open = await new AxeBuilder({ page }).include("#Palette").analyze();
+    const bad = open.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
+    expect(bad.map((v) => `palette: ${v.id} ${v.help} (${v.nodes.length})`)).toEqual([]);
+  });
+}
+
+test("375 px wide: no horizontal scroll", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 800 });
+  for (const url of ["/s/platform", "/s/all", "/e/acme-infra/request-access", "/"]) {
+    await page.goto(url);
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow, url).toBeLessThanOrEqual(0);
+  }
+});
+
+test("the theme toggle sticks", async ({ page }) => {
+  await page.goto("/s/platform");
+  await page.click('button[data-action="theme"]');
+  const t1 = await page.locator("html").getAttribute("data-theme");
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", t1);
+});

@@ -10,7 +10,7 @@ invalid/islands/.firelight/islands/contribution.yaml:3:9: error: "links-only" is
 invalid/islands/.firelight/islands/no-type.yaml:1:1: error: missing `type`: cards, links, template or cards-contribution
 invalid/islands/.firelight/islands/template.yaml:3:8: warning: input "pr" is used by no link
 invalid/islands/.firelight/islands/template.yaml:5:37: error: "[0-9]+" must be anchored: start with ^ and end with $
-invalid/islands/.firelight/islands/template.yaml:7:13: error: "Bad" is not an input name: lowercase letters, digits and _, starting with a letter
+invalid/islands/.firelight/islands/template.yaml:7:13: error: "Bad" is not an input name: lowercase letters, digits and _, starting with a letter, and not `s` or `format`
 invalid/islands/.firelight/islands/template.yaml:9:27: error: with a placeholder in the host, the host needs at least three labels (like app-{pr}.preview.acme.example), so the value can't become the registered domain; "{env}.example" has 2
 invalid/islands/.firelight/islands/template.yaml:10:25: error: a placeholder may only sit in the host's first label, so a value can't change the domain; "{env}" isn't the first label
 invalid/islands/.firelight/islands/template.yaml:11:28: error: in the path a placeholder must be one whole segment, like /runs/{id}/; "runs-{env}" isn't

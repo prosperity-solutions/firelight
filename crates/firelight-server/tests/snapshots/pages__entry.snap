@@ -1,0 +1,25 @@
+---
+source: crates/firelight-server/tests/pages.rs
+expression: "main_of(&pages::entry_page(&ui, c.as_ref(), &Ref\n{ repo: \"acme-infra\".into(), id: \"request-access\".into() },\nSome(\"platform\")).unwrap_or_default())"
+---
+<main class="entry">
+<p class="back"><a href="/s/platform">← Platform</a></p>
+<p class="meta"><span class="kind">Guide</span> · <a href="/r/acme-infra">acme-infra</a></p>
+<h1>Request access rights</h1>
+<p class="summary">Get time-limited admin rights for a cloud account, with a reason.</p>
+<div class="prose">
+<ol>
+<li>Open <a class="link-ref" href="https://access.acme.example" data-show="/s/platform#acme-infra/access-portal">the access portal</a>.</li>
+<li>Pick the role and give a reason.</li>
+<li>The rights end on their own after four hours.</li>
+</ol>
+<h2 id="what-it-does-not-do">What it does not do <a class="anchor" href="#what-it-does-not-do" aria-label="Link to this section">🔗</a></h2>
+<p>It never grants rights to other people. See
+<a href="/e/acme-infra/access-model?s=platform#what-it-is-not">the access model</a>.</p>
+</div>
+<aside class="related"><h2>Related</h2><ul>
+<li><a href="/e/acme-infra/access-model?s=platform">Access model</a></li>
+<li><a href="/e/acme-app/onboarding?s=platform">acme-app › Onboarding</a></li>
+</ul></aside>
+<p class="source">Source: <code>acme-infra/.firelight/guides/request-access.md</code></p>
+</main>

@@ -39,6 +39,8 @@ pub struct Served {
     pub committed_at: Option<String>,
     /// Warnings of the served commit.
     pub diagnostics: Vec<Diagnostic>,
+    /// Staleness inputs per entry (§9.5).
+    pub history: Vec<firelight_store::EntryHistory>,
 }
 
 pub struct Hub {
@@ -88,12 +90,10 @@ impl Hub {
         })
     }
 
-    #[allow(dead_code, reason = "read by the page, API and MCP routes (M4, M6)")]
     pub fn catalog(&self) -> Arc<Catalog> {
         self.catalog.read().map(|c| c.clone()).unwrap_or_default()
     }
 
-    #[allow(dead_code, reason = "read by preview's live reload (M4)")]
     pub fn generation(&self) -> u64 {
         self.generation.load(std::sync::atomic::Ordering::SeqCst)
     }
@@ -146,6 +146,7 @@ impl Hub {
                                         commit: snap.commit,
                                         committed_at: snap.committed_at,
                                         diagnostics: diags,
+                                        history: snap.history,
                                     },
                                 );
                             }
@@ -280,6 +281,7 @@ impl Hub {
                             commit: snapshot.commit,
                             committed_at: snapshot.committed_at,
                             diagnostics,
+                            history: snapshot.history,
                         },
                     );
                 }
@@ -373,6 +375,44 @@ pub fn diagnostics_json(d: &[Diagnostic]) -> String {
             .collect::<Vec<_>>(),
     )
     .unwrap_or_else(|_| "[]".into())
+}
+
+/// The page, API and MCP routes read the hub through this.
+impl firelight_server::content::Content for Hub {
+    fn catalog(&self) -> Arc<Catalog> {
+        Hub::catalog(self)
+    }
+    fn generation(&self) -> u64 {
+        Hub::generation(self)
+    }
+    fn source(&self, repo: &str) -> Option<firelight_server::content::SourceInfo> {
+        let s = self.served.read().ok()?;
+        let x = s.get(repo)?;
+        Some(firelight_server::content::SourceInfo {
+            commit: x.commit.clone(),
+            committed_at: x.committed_at.clone(),
+            web_url: None,
+        })
+    }
+    fn staleness(
+        &self,
+        repo: &str,
+        entry_path: &str,
+    ) -> Option<firelight_server::content::Staleness> {
+        let s = self.served.read().ok()?;
+        let h = s
+            .get(repo)?
+            .history
+            .iter()
+            .find(|h| h.entry_path == entry_path)?;
+        if !firelight_source::pull::is_stale(h) {
+            return None;
+        }
+        Some(firelight_server::content::Staleness {
+            entry_changed: h.entry_changed.clone()?,
+            covers_changed: h.covers_changed.clone()?,
+        })
+    }
 }
 
 #[cfg(test)]

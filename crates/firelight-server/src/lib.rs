@@ -4,6 +4,15 @@
 //! M1 holds the skeleton: the router, `/healthz` and `/readyz`, and graceful
 //! shutdown. Later milestones add the routes behind the same [`AppState`].
 
+pub mod content;
+pub mod html;
+pub mod markdown;
+pub mod onboarding;
+pub mod pages;
+mod routes;
+
+include!(concat!(env!("OUT_DIR"), "/assets.rs"));
+
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -20,6 +29,9 @@ use axum::routing::{get, post};
 pub struct AppState {
     ready: Arc<AtomicBool>,
     webhook: Option<Arc<Webhook>>,
+    content: Option<Arc<dyn content::Content>>,
+    ui: Arc<pages::Ui>,
+    accent: Arc<str>,
 }
 
 /// GitHub webhooks (§6.2): verified by HMAC, a `push` to a configured
@@ -45,6 +57,19 @@ impl AppState {
         Self::default()
     }
 
+    /// With content to serve (the page routes need it).
+    pub fn with_content(
+        mut self,
+        c: Arc<dyn content::Content>,
+        ui: pages::Ui,
+        accent: &str,
+    ) -> Self {
+        self.content = Some(c);
+        self.ui = Arc::new(ui);
+        self.accent = Arc::from(accent);
+        self
+    }
+
     /// With webhooks on (a secret is configured).
     pub fn with_webhook(mut self, w: Webhook) -> Self {
         self.webhook = Some(Arc::new(w));
@@ -67,12 +92,14 @@ pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/healthz", get(healthz))
         .route("/readyz", get(readyz))
+        .merge(routes::pages())
         // GitHub sends push payloads up to 25 MB.
         .route(
             "/webhook/github",
             post(webhook).layer(axum::extract::DefaultBodyLimit::max(25 << 20)),
         )
         .with_state(state)
+        .layer(axum::middleware::from_fn(routes::security_headers))
 }
 
 /// Liveness: the process answers. Always open, no auth, no Host check (§10).
