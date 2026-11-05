@@ -75,6 +75,12 @@ fn get(port: u16, path: &str) -> String {
     b
 }
 
+/// serve's stdout (its log), for the failure message.
+fn log_file(data: &std::path::Path) -> Stdio {
+    let _ = std::fs::create_dir_all(data);
+    std::fs::File::create(data.join("serve.log")).map_or_else(|_| Stdio::null(), Stdio::from)
+}
+
 /// Kills the server even when an assertion fails.
 struct Child(std::process::Child, PathBuf);
 
@@ -89,6 +95,9 @@ impl Drop for Child {
 /// Run serve, search once, and return everything the OTLP receiver got once
 /// the request's own span and the search metric have arrived.
 fn exported(record_queries: bool) -> Vec<(String, String)> {
+    // One server at a time: two at once can starve a small CI runner.
+    static ONE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _one = ONE.lock().unwrap_or_else(|p| p.into_inner());
     let (otlp, got) = receiver();
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let root = root.canonicalize().unwrap_or(root);
@@ -129,10 +138,12 @@ fn exported(record_queries: bool) -> Vec<(String, String)> {
         )
         .env("OTEL_BSP_SCHEDULE_DELAY", "200")
         .env("OTEL_METRIC_EXPORT_INTERVAL", "500")
-        .stdout(Stdio::null())
+        .env("FIRELIGHT_LOG_LEVEL", "debug")
+        .stdout(log_file(&data))
         .stderr(Stdio::null())
         .spawn()
         .unwrap_or_else(|e| panic!("{e}"));
+    let log = data.join("serve.log");
     let _child = Child(child, data);
     let start = Instant::now();
     while !get(port, "/readyz").starts_with("HTTP/1.1 200") {
@@ -143,7 +154,7 @@ fn exported(record_queries: bool) -> Vec<(String, String)> {
         std::thread::sleep(Duration::from_millis(200));
     }
     let _ = get(port, "/api/v1/search?q=zebra-secret-query");
-    let deadline = Instant::now() + Duration::from_secs(20);
+    let deadline = Instant::now() + Duration::from_secs(60);
     loop {
         let all: Vec<(String, String)> = got
             .lock()
@@ -167,7 +178,9 @@ fn exported(record_queries: bool) -> Vec<(String, String)> {
         }
         assert!(
             Instant::now() < deadline,
-            "missing: request span {request_span}, search span {search_span}, metric {metric}"
+            "missing: request span {request_span}, search span {search_span}, metric {metric}; received {} exports; serve's log:\n{}",
+            all.len(),
+            std::fs::read_to_string(&log).unwrap_or_default()
         );
         std::thread::sleep(Duration::from_millis(200));
     }
