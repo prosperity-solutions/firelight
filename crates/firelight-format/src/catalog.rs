@@ -182,9 +182,25 @@ impl B<'_> {
 
 /// Merge repos (in configured source order) into the page model.
 pub fn build(repos: Vec<Repo>, strict: Strictness) -> Catalog {
+    // One repo per id: a later one with a taken id is dropped, with an error.
+    let mut dupes = Vec::new();
+    let mut seen = BTreeSet::new();
+    let repos: Vec<Repo> = repos
+        .into_iter()
+        .filter(|r| {
+            if seen.insert(r.id.clone()) {
+                return true;
+            }
+            dupes.push((
+                r.id.clone(),
+                Diagnostic::error(".firelight/repo.yaml", 0, 0, "duplicate-repo", format!("repo id {:?} is already used by an earlier source; this one is skipped. Every repo needs its own id", r.id)),
+            ));
+            false
+        })
+        .collect();
     let mut b = B {
         repos: &repos,
-        diags: Vec::new(),
+        diags: dupes,
         strict,
     };
 

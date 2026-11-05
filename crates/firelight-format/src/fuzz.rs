@@ -15,11 +15,7 @@ fn run(files: Vec<InputFile>) {
 }
 
 fn file(path: &str, data: &[u8]) -> InputFile {
-    InputFile {
-        path: path.into(),
-        contents: Some(data.to_vec()),
-        size: data.len() as u64,
-    }
+    InputFile::regular(path, data.to_vec())
 }
 
 /// Arbitrary bytes as each YAML file of the format.

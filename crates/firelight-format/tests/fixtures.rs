@@ -6,6 +6,7 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use firelight_format::catalog::{self, Catalog, PlacedKind, Strictness};
+use firelight_format::repo::FileKind;
 use firelight_format::{InputFile, Limits, Repo, parse_repo};
 
 fn root() -> PathBuf {
@@ -33,6 +34,7 @@ fn read(dir: &Path) -> Vec<InputFile> {
             if m.file_type().is_symlink() {
                 out.push(InputFile {
                     path: rel,
+                    kind: FileKind::Symlink,
                     contents: None,
                     size: 0,
                 });
@@ -40,11 +42,7 @@ fn read(dir: &Path) -> Vec<InputFile> {
                 walk(base, &p, out);
             } else {
                 let b = std::fs::read(&p).unwrap_or_default();
-                out.push(InputFile {
-                    path: rel,
-                    size: b.len() as u64,
-                    contents: Some(b),
-                });
+                out.push(InputFile::regular(rel, b));
             }
         }
     }
@@ -266,31 +264,23 @@ fn invalid_cases() {
 fn limits_are_checked_before_parsing() {
     let big = InputFile {
         path: "links.yaml".into(),
+        kind: FileKind::Regular,
         contents: None,
         size: 10 << 20,
     };
-    let repo = InputFile {
-        path: "repo.yaml".into(),
-        contents: Some(b"format: 1\nid: x\nname: X\nsummary: S\n".to_vec()),
-        size: 34,
-    };
+    let repo = InputFile::regular(
+        "repo.yaml",
+        b"format: 1\nid: x\nname: X\nsummary: S\n".to_vec(),
+    );
     let (r, d) = parse_repo(&[repo.clone(), big], None, &Limits::default());
     assert!(r.is_none());
     assert!(d.iter().any(|d| d.code == "too-large"), "{d:?}");
     let many: Vec<InputFile> = (0..1001)
-        .map(|i| InputFile {
-            path: format!("guides/g{i}.md"),
-            contents: Some(vec![]),
-            size: 0,
-        })
+        .map(|i| InputFile::regular(format!("guides/g{i}.md"), vec![]))
         .collect();
     let (r, d) = parse_repo(&many, None, &Limits::default());
     assert!(r.is_none() && d.iter().any(|d| d.code == "too-many-files"));
-    let file = InputFile {
-        path: "about.md".into(),
-        contents: Some(vec![b'a'; 300 << 10]),
-        size: 300 << 10,
-    };
+    let file = InputFile::regular("about.md", vec![b'a'; 300 << 10]);
     let (_, d) = parse_repo(&[repo, file], None, &Limits::default());
     assert!(d.iter().any(|d| d.code == "file-too-large"));
 }

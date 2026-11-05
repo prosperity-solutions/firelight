@@ -74,3 +74,13 @@ fn a_folder_without_firelight() {
     assert_eq!(code, 1);
     assert!(out.contains("crates has no .firelight/ folder"), "{out}");
 }
+
+#[test]
+fn two_folders_with_one_id() {
+    let (code, out) = run(&["fixtures/acme-app", "fixtures/acme-app"]);
+    assert_eq!(code, 1, "{out}");
+    assert!(
+        out.contains("repo id \"acme-app\" is already used by an earlier source"),
+        "{out}"
+    );
+}

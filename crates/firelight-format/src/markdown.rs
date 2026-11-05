@@ -5,7 +5,7 @@
 //! other URLs must be `https:`, `http:`, `mailto:` or a `#fragment`, and images
 //! are refused. Raw HTML is not an error here; the renderer escapes it (§17.1).
 
-use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{Event, LinkType, Options, Parser, Tag, TagEnd};
 
 use crate::diag::Diagnostic;
 use crate::ids::{Ref, Slugger};
@@ -18,6 +18,7 @@ pub fn options() -> Options {
 /// Split `---\n<yaml>---\n<body>`. Returns the YAML, the body, and the 1-based
 /// line where the body starts.
 pub fn split_front_matter(text: &str) -> Option<(&str, &str, u32)> {
+    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
     let rest = text
         .strip_prefix("---\n")
         .or_else(|| text.strip_prefix("---\r\n"))?;
@@ -50,7 +51,18 @@ pub fn classify(dest: &str, home: &str) -> Result<Dest, String> {
     }
     if let Some(r) = dest.strip_prefix("entry:") {
         let (r, h) = match r.split_once('#') {
-            Some((r, h)) => (r, Some(h.to_string())),
+            Some((r, h)) => {
+                if h.is_empty()
+                    || !h
+                        .chars()
+                        .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+                {
+                    return Err(format!(
+                        "{h:?} is not a heading anchor: use the heading's slug, like #what-it-is-not"
+                    ));
+                }
+                (r, Some(h.to_string()))
+            }
             None => (r, None),
         };
         return Ref::parse(r, home).map(|r| Dest::Entry(r, h));
@@ -80,9 +92,10 @@ impl Lines {
         Lines(v)
     }
     /// 1-based (line, col) of a byte offset.
-    fn at(&self, offset: usize) -> (u32, u32) {
+    fn at(&self, text: &str, offset: usize) -> (u32, u32) {
         let i = self.0.partition_point(|&s| s <= offset).saturating_sub(1);
-        let col = offset - self.0[i];
+        // Characters, not bytes, as YAML positions count them.
+        let col = text.get(self.0[i]..offset).map_or(0, |s| s.chars().count());
         (
             u32::try_from(i + 1).unwrap_or(u32::MAX),
             u32::try_from(col + 1).unwrap_or(u32::MAX),
@@ -102,7 +115,7 @@ pub fn scan(body: &str, home: &str, path: &str, first_line: u32) -> (Markdown, V
     let mut slugger = Slugger::default();
     let mut heading: Option<(u8, String)> = None;
     let loc = |off: usize| {
-        let (l, c) = lines.at(off);
+        let (l, c) = lines.at(body, off);
         Loc {
             path: path.to_string(),
             line: l + first_line - 1,
@@ -133,6 +146,11 @@ pub fn scan(body: &str, home: &str, path: &str, first_line: u32) -> (Markdown, V
                 let l = loc(range.start);
                 diags.push(Diagnostic::error(path, l.line, l.col, "image", "images are not supported in v1 (no remote fetches on the page). Link to the image instead"));
             }
+            // <ops@acme.example>: an email autolink, a mailto: link.
+            Event::Start(Tag::Link {
+                link_type: LinkType::Email,
+                ..
+            }) => {}
             Event::Start(Tag::Link { dest_url, .. }) => {
                 let l = loc(range.start);
                 match classify(&dest_url, home) {
@@ -169,6 +187,10 @@ mod tests {
         assert_eq!((y, b, line), ("format: 1\ntitle: X\n", "Hello\n", 5));
         assert!(split_front_matter("no front matter").is_none());
         assert!(split_front_matter("---\nunterminated\n").is_none());
+        assert!(
+            split_front_matter("\u{feff}---\nformat: 1\n---\nx").is_some(),
+            "a UTF-8 BOM is fine"
+        );
     }
 
     #[test]
@@ -197,5 +219,25 @@ mod tests {
         assert!(msgs.iter().any(|m| m.contains("javascript:")));
         assert!(msgs.iter().any(|m| m.contains("data:text")));
         assert!(msgs.iter().any(|m| m.starts_with("9:link-scheme")));
+    }
+}
+
+#[cfg(test)]
+mod more_tests {
+    use super::*;
+
+    #[test]
+    fn email_autolinks_and_unicode_columns() {
+        let (md, d) = scan(
+            "Mail <ops@acme.example>.\nÄÖÜ [x](javascript:y)\n",
+            "r",
+            "a.md",
+            1,
+        );
+        assert!(md.refs.is_empty());
+        assert_eq!(d.len(), 1, "{d:?}");
+        assert_eq!((d[0].line, d[0].col), (2, 5), "columns count characters");
+        let (_, d) = scan("[x](entry:a#bad.anchor) [y](entry:a#)", "r", "a.md", 1);
+        assert_eq!(d.len(), 2, "{d:?}");
     }
 }

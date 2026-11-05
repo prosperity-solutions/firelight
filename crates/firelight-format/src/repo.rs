@@ -39,10 +39,32 @@ impl Default for Limits {
 pub struct InputFile {
     /// Relative to `.firelight/`, with `/` separators, e.g. `guides/x.md`.
     pub path: String,
-    /// `None`: the file is a symlink (refused, never followed).
+    pub kind: FileKind,
+    /// `None` when not read: a symlink, a special file, or over a size limit.
     pub contents: Option<Vec<u8>>,
-    /// The file's size when its contents were not read (over the limit).
+    /// The file's size (also when its contents were not read).
     pub size: u64,
+}
+
+impl InputFile {
+    /// A regular file with its contents.
+    pub fn regular(path: impl Into<String>, contents: Vec<u8>) -> Self {
+        InputFile {
+            path: path.into(),
+            kind: FileKind::Regular,
+            size: contents.len() as u64,
+            contents: Some(contents),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileKind {
+    Regular,
+    /// Refused, never followed.
+    Symlink,
+    /// A FIFO, socket or device: refused, never read.
+    Special,
 }
 
 const SUMMARY_MAX: usize = 200;
@@ -148,8 +170,12 @@ impl Checker {
         let mut texts: BTreeMap<String, String> = BTreeMap::new();
         for f in files {
             let path = format!("{PREFIX}{}", f.path);
+            if f.kind == FileKind::Special {
+                self.err(&path, 0, 0, "special-file", "not a regular file (a FIFO, socket or device); .firelight/ holds plain files only");
+                continue;
+            }
             let Some(bytes) = &f.contents else {
-                if f.size > limits.max_file_bytes {
+                if f.kind == FileKind::Regular {
                     self.err(
                         &path,
                         0,
@@ -196,6 +222,9 @@ impl Checker {
         // Every YAML file and front matter must state a version we read.
         let mut no_version: BTreeSet<String> = BTreeSet::new();
         for (p, text) in &texts {
+            if !is_format_file(p) {
+                continue; // reported as an unknown file below
+            }
             let yaml_text = if p.ends_with(".md") {
                 if p == "about.md" {
                     continue;
@@ -220,7 +249,7 @@ impl Checker {
                             no_version.insert(p.clone());
                         }
                         Some(f) => {
-                            let n = f.value.as_u64().map(|n| n as u32);
+                            let n = f.value.as_u64().and_then(|n| u32::try_from(n).ok());
                             if !n.is_some_and(|n| FORMAT_VERSIONS.contains(&n)) {
                                 self.err(
                                 &path,
@@ -375,7 +404,10 @@ impl Checker {
                         }
                     }
                 }
-                ["islands", file] if file.ends_with(".yaml") || file.ends_with(".yml") => {
+                ["islands", file] if file.ends_with(".yml") => {
+                    self.err(&path, 0, 0, "file-name", "island files end in .yaml");
+                }
+                ["islands", file] if file.ends_with(".yaml") => {
                     let dspace = repo.default_spaces().into_iter().next().unwrap_or_default();
                     let mut out = IslandsOut {
                         islands: &mut repo.islands,
@@ -1150,6 +1182,17 @@ impl Checker {
             }
         }
         errs.append(&mut wrong_kind);
+        // "What is this?" points at a concept (§5.3).
+        for l in &repo.links {
+            if let Some((r, lc)) = &l.entry
+                && r.repo == home
+                && repo
+                    .entry(&r.id)
+                    .is_some_and(|e| e.kind == EntryKind::Guide)
+            {
+                errs.push(Diagnostic::warning(&lc.path, lc.line, lc.col, "entry-not-concept", format!("{:?} is a guide; a link's `entry` is the concept that says what the link is", r.id)));
+            }
+        }
         // Heading anchors on local entry refs.
         for e in repo
             .entries
@@ -1174,6 +1217,17 @@ impl Checker {
             }
         }
         self.diags.extend(errs);
+    }
+}
+
+/// The files the format defines (others are ignored, with a warning).
+fn is_format_file(p: &str) -> bool {
+    let parts: Vec<&str> = p.split('/').collect();
+    match parts.as_slice() {
+        ["repo.yaml" | "links.yaml" | "golden.yaml" | "spaces.yaml" | "about.md"] => true,
+        ["islands", f] => f.ends_with(".yaml"),
+        ["concepts" | "guides", f] => f.ends_with(".md"),
+        _ => false,
     }
 }
 

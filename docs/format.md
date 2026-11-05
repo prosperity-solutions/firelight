@@ -19,7 +19,9 @@ A repo describes itself in a `.firelight/` folder at its root:
   spaces.yaml         optional: spaces this repo declares
 ```
 
-Any other file is ignored, with a warning.
+Any other file is ignored, with a warning. YAML files end in `.yaml`; a
+`repo.yml` or `islands/*.yml` is an error that says so. Files must be regular
+files: symlinks, FIFOs and devices are errors.
 
 ## General rules
 
@@ -31,7 +33,9 @@ Any other file is ignored, with a warning.
 - **Ids** match `^[a-z0-9][a-z0-9-]{0,62}$`: lowercase letters, digits and
   dashes. Ids are unique per repo across concepts, guides, links and islands.
 - **Refs** point at things: `argocd` (this repo) or `infra-repo/argocd` (another
-  repo). A ref to something missing **in the same repo is an error**. A ref
+  repo). A ref to something missing **in the same repo is an error**, except a
+  link's `at` target: a link is never dropped, so a missing island or card puts
+  it in the Unsorted card with a warning (see `links.yaml`). A ref
   into another repo that doesn't resolve is a warning (an error with
   `firelight check --strict`), because only the hub sees every repo; it renders
   as plain text, never as a dead link.
@@ -127,9 +131,12 @@ The front matter sits between two `---` lines at the very top of the file.
   - `#<heading>`: a heading on the same page.
 
   Anything else (`javascript:`, `data:`, `file:`, relative paths) is an error.
-- Headings get stable anchors: lowercase, letters and digits kept, spaces
-  become dashes, other characters dropped (`What it does not do` →
-  `what-it-does-not-do`). A repeated heading gets `-2`, `-3`.
+- Headings get stable anchors: lowercased; letters (of any language), digits,
+  `_` and `-` kept; spaces become `-`; everything else dropped
+  (`What it does not do` → `what-it-does-not-do`). A heading with nothing left
+  is `section`. A repeated heading gets `-2`, `-3`. An `entry:<ref>#<anchor>`
+  anchor uses the same characters.
+- An email autolink like `<ops@acme.example>` is a `mailto:` link.
 
 ## `links.yaml`
 
@@ -225,8 +232,8 @@ help: Only services the PR deployed exist.
 ```
 
 - An input `name` is lowercase letters, digits and `_`, starting with a letter.
-  Its `pattern` must be anchored (`^…$`); every value must match it before
-  anything renders.
+  Its `pattern` must be anchored (`^…$`) and is matched against the whole
+  value; every value must match it before anything renders.
 - A URL starts with `https://` or `http://` and may use a `{name}` placeholder
   only:
   1. inside the host's **first label** (`app-{pr}.preview.acme.example`), and the
@@ -234,7 +241,12 @@ help: Only services the PR deployed exist.
   2. as **one whole path segment** (`/previews/{pr}/logs`);
   3. as **one whole query value** (`?id={pr}`).
 
-  So a value can never change the scheme or the domain.
+  So a value can never change the scheme, never reach past the host's first
+  label, and never turn the host into an IP address (the host may only use
+  letters, digits, dots and dashes around the placeholder, and may not end in
+  a number). One thing the three-label rule can't know: on a public suffix
+  with two labels, like `{pr}.co.uk`, the first label *is* the registered
+  domain. Don't put a placeholder there.
 - Filling in: a value in the host must also be `a-z`, `0-9` and `-` only, at
   most 63 characters; a value in the path is percent-encoded as one segment and
   `.` and `..` are refused; a value in the query is percent-encoded.

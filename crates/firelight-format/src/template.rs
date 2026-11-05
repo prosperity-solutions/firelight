@@ -3,7 +3,8 @@
 //! A template URL may use a `{name}` placeholder only in three positions, so a
 //! value can never change the scheme or the registered domain:
 //! 1. inside the host's **first label** (`https://app-{pr}.preview.acme.example`);
-//!    the host must have at least three labels then;
+//!    the host must then have at least three labels, use only letters, digits,
+//!    dots and dashes around the placeholder, and not end in a number (an IP);
 //! 2. as **one whole path segment** (`/runs/{id}/logs`);
 //! 3. as **one whole query value** (`?pr={pr}`).
 //!
@@ -109,7 +110,30 @@ pub fn check_url(url: &str, inputs: &[&str]) -> Result<Url, String> {
     if host.is_empty() {
         return Err(format!("{url:?} has no host"));
     }
+    // Only plain host characters around the placeholders: a `\` (which
+    // browsers read as `/`), `%`, `@` or anything else could let a value
+    // escape into the authority.
+    let mut around = Vec::new();
+    split_vars(host, Position::Host, &mut around)?;
+    let plain: String = around
+        .iter()
+        .filter_map(|p| match p {
+            Piece::Lit(l) => Some(l.as_str()),
+            Piece::Var(..) => None,
+        })
+        .collect();
+    if !plain
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
+    {
+        return Err(format!(
+            "the host {host:?} may only use letters, digits, dots and dashes around a placeholder"
+        ));
+    }
     let labels: Vec<&str> = host.split('.').collect();
+    if labels.iter().any(|l| l.is_empty()) {
+        return Err(format!("the host {host:?} has an empty label"));
+    }
     for (i, label) in labels.iter().enumerate() {
         if i > 0 && label.contains(['{', '}']) {
             return Err(format!(
@@ -121,6 +145,15 @@ pub fn check_url(url: &str, inputs: &[&str]) -> Result<Url, String> {
         return Err(format!(
             "with a placeholder in the host, the host needs at least three labels (like app-{{pr}}.preview.acme.example), so the value can't become the registered domain; {host:?} has {}",
             labels.len()
+        ));
+    }
+    if labels[0].contains('{')
+        && labels
+            .last()
+            .is_some_and(|l| l.chars().all(|c| c.is_ascii_digit()))
+    {
+        return Err(format!(
+            "the host {host:?} ends in a number, so a value could turn it into an IP address"
         ));
     }
     split_vars(labels[0], Position::Host, &mut pieces)?;
@@ -213,14 +246,15 @@ pub fn check_url(url: &str, inputs: &[&str]) -> Result<Url, String> {
     Ok(u)
 }
 
-/// An input pattern must be anchored and compile (with a size cap).
+/// An input pattern must be anchored and compile (with a size cap). It is
+/// compiled as `^(?:…)$`, so `^a|b$` still has to match the whole value.
 pub fn check_pattern(p: &str) -> Result<regex::Regex, String> {
     if !p.starts_with('^') || !p.ends_with('$') {
         return Err(format!(
             "{p:?} must be anchored: start with ^ and end with $"
         ));
     }
-    regex::RegexBuilder::new(p)
+    regex::RegexBuilder::new(&format!("^(?:{p})$"))
         .size_limit(64 << 10)
         .build()
         .map_err(|e| format!("{p:?} is not a valid pattern: {e}"))
@@ -336,6 +370,11 @@ mod tests {
             "https://ci.acme.example/{other}",
             "https://ci.acme.example/{Bad}",
             "https://ci.acme.example/{v",
+            "https://{v}\\.preview.acme.example/",
+            "https://{v}.preview.acme.example\\x/",
+            "https://a-{v}.b.10.20/",
+            "https://{v}%2e.preview.acme.example/",
+            "https://{v}..acme.example/",
         ] {
             assert!(check_url(bad, &["v"]).is_err(), "{bad} should be refused");
         }
@@ -347,6 +386,10 @@ mod tests {
         assert!(check_pattern("[0-9]+").is_err());
         assert!(check_pattern("^[0-9]+").is_err());
         assert!(check_pattern("^(unclosed$").is_err());
+        // Alternation can't escape the anchors.
+        let re = check_pattern("^a|b$").unwrap_or_else(|e| panic!("{e}"));
+        assert!(re.is_match("a") && re.is_match("b"));
+        assert!(!re.is_match("ab") && !re.is_match("xb") && !re.is_match("ax"));
     }
 
     /// A test per position: dot-segments, /, %, @, #, ? and Unicode (§5.4).

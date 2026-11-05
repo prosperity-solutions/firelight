@@ -50,7 +50,9 @@ pub fn run(args: Args) -> ExitCode {
             d
         }));
         if let Some(r) = repo {
-            prefixes.insert(r.id.clone(), prefix);
+            // The first folder with an id keeps it; the catalog reports a
+            // second one against that id.
+            prefixes.entry(r.id.clone()).or_insert(prefix);
             repos.push(r);
         }
     }
