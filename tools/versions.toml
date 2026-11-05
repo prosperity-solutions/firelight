@@ -7,7 +7,7 @@
 #   kind = "bin"    → a release download, checked against sha256_<os>_<arch>,
 #                     with `released` (checked against GitHub's release by depage)
 #   url             → {version} is replaced; {asset} is asset_<os>_<arch>
-#   path            → the binary inside the archive ({version} replaced)
+#   path            → the binary inside the archive ({version}, {os}, {arch} replaced)
 
 [cargo-deny]
 kind = "cargo"
@@ -84,3 +84,36 @@ sha256_linux_amd64 = "4fbf89eb7748c6aed84d833ee1a29edac48fae614468ca9a82896ec32f
 sha256_linux_arm64 = "a4d4bf78d902af1a148bf0662af08e13b791061e46e6e2183b0660eed96b43f6"
 sha256_darwin_arm64 = "049c648578c056a180519c4d8c31d5436dbb9df74369b2e29611aae99d7e9b36"
 sha256_darwin_amd64 = "b02f6ee5e87b54de138ea532dfdb42c4b88400b5f8cfab0900e5155fc81c1713"
+
+[helm]
+kind = "bin"
+version = "4.3.1"
+released = "2026-10-15"
+repo = "helm/helm"
+tag = "v4.3.1"
+url = "https://get.helm.sh/{asset}"
+path = "{os}-{arch}/helm"
+asset_linux_amd64 = "helm-v4.3.1-linux-amd64.tar.gz"
+asset_linux_arm64 = "helm-v4.3.1-linux-arm64.tar.gz"
+asset_darwin_arm64 = "helm-v4.3.1-darwin-arm64.tar.gz"
+asset_darwin_amd64 = "helm-v4.3.1-darwin-amd64.tar.gz"
+sha256_linux_amd64 = "0403a88ae20913d11b10a2467b50087721fea7581736da6b9d3992f5357fe54b"
+sha256_linux_arm64 = "8cf8f66ecbc252ac8f7f06cca68aba88508ddfde3a6a34feb1678ad1694b4f88"
+sha256_darwin_arm64 = "6b4e61c8cd27d99e5a801e63ff25dd5c70b36875c2cd659d3e9ce6b76fc23198"
+sha256_darwin_amd64 = "34bec4eba761ba5c16d1965ee6b8f5b0abe5993974a802274e2a4f0418893d89"
+
+[buildx]
+kind = "bin"
+version = "0.38.1"
+released = "2026-10-20"
+repo = "docker/buildx"
+url = "https://github.com/docker/buildx/releases/download/v{version}/{asset}"
+path = ""
+asset_linux_amd64 = "buildx-v0.38.1.linux-amd64"
+asset_linux_arm64 = "buildx-v0.38.1.linux-arm64"
+asset_darwin_arm64 = "buildx-v0.38.1.darwin-arm64"
+asset_darwin_amd64 = "buildx-v0.38.1.darwin-amd64"
+sha256_linux_amd64 = "e25d5cd675092bb5d1d03632fdc46cdf3fede7b514dc5f023a105e00d3ce5ad4"
+sha256_linux_arm64 = "3b83b3731916ba433feccaaa689fe5bcdc81c641d92c8e6c2ea865dfa141c97a"
+sha256_darwin_arm64 = "6f20ba2437865311ef99015bf5d1039c3c8e4d2177c1c64aa41b134b5ecd3012"
+sha256_darwin_amd64 = "76e7a809cc98d34a4c1b7db23feac673def5b8dcdddd9e713ef26598689aa796"

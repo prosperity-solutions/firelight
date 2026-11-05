@@ -1,0 +1,4 @@
+*
+!dist/firelight-linux-amd64
+!dist/firelight-linux-arm64
+!docker/data/

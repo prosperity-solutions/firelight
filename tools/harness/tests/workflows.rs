@@ -11,13 +11,15 @@ const CI: &str = ".github/workflows/ci.yml";
 fn is_release_job(name: &str) -> bool {
     matches!(
         name,
-        "publish" | "attest" | "release" | "verify" | "site" | "pages"
+        "version" | "publish" | "attest" | "release" | "verify" | "site" | "pages"
     ) || name.starts_with("build-")
 }
 
 /// Jobs without harden-runner: attest (first-party actions only) and pages
-/// (exactly one deploy step), as maintenance-manager §17.2.
-const NO_HARDEN: &[&str] = &["attest", "pages"];
+/// (exactly one deploy step), as maintenance-manager §17.2; and the two macOS
+/// builds, where harden-runner's block mode doesn't enforce (§17.3).
+const NO_HARDEN: &[&str] = &["attest", "pages", "build-macos-arm64", "build-macos-amd64"];
+const MACOS: &[&str] = &["build-macos-arm64", "build-macos-amd64"];
 
 /// The only third-party actions allowed (§17.3); fixed for the run.
 const THIRD_PARTY: &[&str] = &["step-security/harden-runner", "zizmorcore/zizmor-action"];
@@ -155,6 +157,11 @@ fn jobs_follow_the_rules() {
                     .is_some_and(|s| !s.trim().is_empty()),
                 "{name}: allowed-endpoints"
             );
+        } else if MACOS.contains(&name.as_str()) {
+            assert!(
+                job["runs-on"].as_str().unwrap_or("").starts_with("macos-"),
+                "{name}: only macOS jobs may skip harden-runner"
+            );
         } else {
             for s in &st {
                 assert!(s["run"].is_null(), "{name}: no run: steps");
@@ -274,6 +281,65 @@ fn all_green_needs_every_check_job() {
             continue;
         }
         assert!(n.contains(name), "all-green must need {name}");
+    }
+}
+
+#[test]
+fn release_binaries_come_from_four_named_jobs() {
+    let jobs = jobs();
+    for t in ["linux-amd64", "linux-arm64", "macos-arm64", "macos-amd64"] {
+        let name = format!("build-{t}");
+        let job = jobs.get(&name).unwrap_or_else(|| panic!("no {name} job"));
+        assert!(
+            job["outputs"]["sha256"].is_string(),
+            "{name} exposes its sha256"
+        );
+        let up = steps(job)
+            .into_iter()
+            .filter(|s| {
+                s["uses"]
+                    .as_str()
+                    .unwrap_or("")
+                    .starts_with("actions/upload-artifact@")
+            })
+            .count();
+        assert_eq!(up, 1, "{name} uploads exactly one artifact");
+    }
+    let attest = steps(&jobs["attest"]);
+    assert_eq!(
+        attest.len(),
+        7,
+        "attest: 4 archives, SHA256SUMS, image, chart"
+    );
+    for s in attest {
+        assert!(
+            s["with"]["subject-digest"]
+                .as_str()
+                .is_some_and(|d| d.contains("needs.")),
+            "attest digests come from job outputs"
+        );
+    }
+}
+
+#[test]
+fn only_our_push_targets() {
+    // packages: write is used only for our image and our chart.
+    let text = read(CI);
+    for (i, l) in text.lines().enumerate() {
+        for word in l.split_whitespace() {
+            let w = word.trim_matches(|c| c == '"' || c == '\'');
+            if let Some(rest) = w
+                .strip_prefix("ghcr.io/")
+                .or_else(|| w.strip_prefix("oci://ghcr.io/"))
+            {
+                let ok = rest.starts_with("prosperity-solutions/firelight")
+                    || rest.starts_with("prosperity-solutions/charts")
+                    || rest.starts_with("$REPO")
+                    || rest.starts_with("$OWNER")
+                    || rest.starts_with("%s");
+                assert!(ok, "ci.yml:{}: unexpected registry target {w}", i + 1);
+            }
+        }
     }
 }
 

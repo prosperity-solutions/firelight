@@ -30,6 +30,14 @@ The exact commands, with digests, are in every release's notes.
 
 ## Recovery
 
+- **The first release's packages.** The image and chart packages are created
+  by the first `publish`. Packages that a workflow in a public repository
+  creates are linked to it and normally start public (maintenance-manager
+  found this for its own first release). If `verify` fails on an anonymous
+  pull, the owner sets each package to public once (GitHub → Packages → the
+  package → Package settings → Change visibility; there is no API for it),
+  then re-runs `verify` with `gh run rerun --failed <run-id>`.
+
 - `gh run rerun --failed <run-id>` re-runs failed release jobs for the same
   commit.
 - A failure before the release is published leaves no tag, so the next

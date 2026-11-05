@@ -30,3 +30,13 @@ updates:
     groups:
       actions-minor-patch:
         update-types: ["minor", "patch"]
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "build(deps)"
+    open-pull-requests-limit: 2

@@ -1,0 +1,8 @@
+Firelight is installed. Open {{ .Values.publicUrl }}
+
+The first start downloads the embedding model and can take a while; watch it with:
+  kubectl --namespace {{ .Release.Namespace }} rollout status deployment/{{ include "firelight.fullname" . }}
+{{- if or (not .Values.config.auth) (not .Values.config.auth.ui) (not .Values.config.auth.mcp) }}
+
+The server refuses to start until config.auth.ui and config.auth.mcp are set.
+{{- end }}
