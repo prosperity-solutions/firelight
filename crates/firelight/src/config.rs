@@ -119,7 +119,7 @@ pub static KEYS: &[Key] = &[
         kind: Kind::Sources,
         default: Some("[]"),
         secret: false,
-        doc: "The repos and folders to read, as `[[sources]]` tables (`id`, `kind` = `github` | `git` | `dir`, `url` or `path`, optional `ref`, `token_file`, `token_auth` = `bearer` | `basic`). In the env var: a JSON array of the same objects.",
+        doc: "The repos and folders to read, as `[[sources]]` tables (`id`, `kind` = `github` | `git` | `dir`, `url` or `path`, optional `ref`, `token_file`, `token_auth` = `bearer` | `basic`). `git` URLs are `https://`, `http://` or a local `file://`; `github` URLs are `https://github.com/<owner>/<repo>` (with a GitHub App, a token, or anonymous for public repos). In the env var: a JSON array of the same objects.",
     },
     Key {
         path: "poll.interval",
@@ -706,6 +706,12 @@ pub fn load(inputs: &Inputs, purpose: Purpose) -> Result<Config, Problems> {
     let sources = b.sources(inputs);
     let poll_interval = b.duration("poll.interval");
     let webhook_secret = b.string("webhook.secret").map(Secret);
+    if webhook_secret
+        .as_ref()
+        .is_some_and(|w| w.0.trim().len() < 16)
+    {
+        prob(&mut problems, "webhook.secret", &origin_of_raw(&raw, "webhook.secret"), "needs at least 16 characters, or anyone could sign deliveries. Generate one with: openssl rand -hex 32".into());
+    }
     let app_id = b.int("github_app.id");
     let app_key = b.string("github_app.private_key").map(Secret);
     let max_files = b.int("limits.max_files").unwrap_or(1000);
@@ -920,6 +926,10 @@ pub fn load(inputs: &Inputs, purpose: Purpose) -> Result<Config, Problems> {
         ui_default_space,
         shown: b.shown,
     })
+}
+
+fn origin_of_raw(raw: &BTreeMap<&'static str, Raw>, k: &str) -> Origin {
+    raw.get(k).map_or(Origin::Unset, |r| r.origin.clone())
 }
 
 /// Typed access to the raw values, collecting problems and `config show` rows.
@@ -1241,11 +1251,33 @@ impl Builder<'_> {
                     ),
                 },
                 _ => match s("url") {
+                    // A local repo over file:// (tests, preview, the Veld
+                    // `serve` variant); git sources only.
+                    Some(u) if kind == SourceKind::Git && u.starts_with("file://") => {
+                        match url::Url::parse(&u) {
+                            Ok(parsed) => url = Some(parsed),
+                            Err(e) => self.bad(
+                                &format!("{key}.url"),
+                                o.clone(),
+                                format!("{u:?} is not a file:// URL ({e})."),
+                            ),
+                        }
+                    }
                     Some(u) => match check_url(&u) {
                         Ok(parsed) => {
-                            if kind == SourceKind::Github && parsed.host_str() != Some("github.com")
+                            if kind == SourceKind::Github
+                                && (parsed.host_str() != Some("github.com")
+                                    || parsed.scheme() != "https")
                             {
                                 self.bad(&format!("{key}.url"), o.clone(), "a github source needs a https://github.com/<owner>/<repo> URL. Use kind = \"git\" for other hosts.".into());
+                            }
+                            // A token over plain http would travel in clear text.
+                            let loopback = matches!(
+                                parsed.host_str(),
+                                Some("localhost" | "127.0.0.1" | "[::1]")
+                            );
+                            if parsed.scheme() == "http" && s("token_file").is_some() && !loopback {
+                                self.bad(&format!("{key}.url"), o.clone(), "a token_file needs an https:// URL, or the token would travel in clear text.".into());
                             }
                             url = Some(parsed);
                         }

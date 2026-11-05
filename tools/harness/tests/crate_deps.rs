@@ -68,6 +68,32 @@ fn closure() -> BTreeMap<String, BTreeSet<String>> {
     out
 }
 
+/// Each workspace member's direct normal dependencies.
+fn direct_deps() -> BTreeMap<String, BTreeSet<String>> {
+    let m = metadata();
+    let mut out = BTreeMap::new();
+    let members: BTreeSet<&str> = m["workspace_members"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|v| v.as_str())
+        .collect();
+    for p in m["packages"].as_array().into_iter().flatten() {
+        if !members.contains(p["id"].as_str().unwrap_or("")) {
+            continue;
+        }
+        let deps = p["dependencies"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|d| d["kind"].is_null())
+            .filter_map(|d| d["name"].as_str().map(String::from))
+            .collect();
+        out.insert(p["name"].as_str().unwrap_or("").to_string(), deps);
+    }
+    out
+}
+
 #[test]
 fn dependency_rules() {
     let c = closure();
@@ -91,7 +117,10 @@ fn dependency_rules() {
         !format.iter().any(|d| d.starts_with("firelight-")),
         "firelight-format depends on nothing in the workspace (§4)"
     );
-    for (member, deps) in &c {
+    let direct = direct_deps();
+    for (member, deps) in &direct {
+        // Direct use: the binary may use the store, but only the store
+        // talks to SQLite, and only the embed crate to candle (§4).
         if member != "firelight-store" {
             assert!(
                 !deps.contains("rusqlite"),
@@ -104,6 +133,8 @@ fn dependency_rules() {
                 "{member}: only firelight-embed may depend on candle (§4)"
             );
         }
+    }
+    for (member, deps) in &c {
         for banned in [
             "openssl",
             "openssl-sys",

@@ -369,6 +369,9 @@ jobs:
             static.crates.io:443
             gcr.io:443
             storage.googleapis.com:443
+            cgr.dev:443
+            # cgr.dev serves image layers from its Cloudflare R2 bucket (D5).
+            9236a389bd48b984df91adc1bc924620.r2.cloudflarestorage.com:443
             github.com:443
             release-assets.githubusercontent.com:443
             objects.githubusercontent.com:443
@@ -416,6 +419,8 @@ jobs:
           curl -fsS http://127.0.0.1:8080/healthz
           [ "$(docker inspect -f '{{.Config.User}}' firelight:ci)" = 65532:65532 ]
           docker run --rm firelight:ci version
+          # git sources need git >= 2.40 in the image (D1, D5).
+          docker run --rm --entrypoint git firelight:ci --version
           docker rm -f fl
       - name: Rehearse the release's two-platform build (pinned buildx and BuildKit, not pushed)
         run: |
@@ -681,6 +686,9 @@ jobs:
             pkg-containers.githubusercontent.com:443
             gcr.io:443
             storage.googleapis.com:443
+            cgr.dev:443
+            # cgr.dev serves image layers from its Cloudflare R2 bucket (D5).
+            9236a389bd48b984df91adc1bc924620.r2.cloudflarestorage.com:443
             mirror.gcr.io:443
             *.actions.githubusercontent.com:443
             *.blob.core.windows.net:443

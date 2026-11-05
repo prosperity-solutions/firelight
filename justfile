@@ -1,5 +1,5 @@
 # Recipes (docs/HANDOVER.md §14). Run: scripts/dev/t just <recipe>
-# Recipes for later milestones (e2e, preview, fixtures) arrive with them.
+# Recipes for later milestones (e2e, preview) arrive with them.
 
 # Build the binary.
 build:
@@ -35,3 +35,7 @@ check-fixtures:
 # The chart's lint and render tests.
 chart:
     sh chart/tests/render.sh
+
+# Build the local git histories (fixtures/histories) into bare repos under target/fixtures/.
+fixtures:
+    sh fixtures/histories/build.sh target/fixtures

@@ -513,3 +513,37 @@ fn build_variables_and_empty_files_are_fine() {
     ]);
     assert!(problems(&env, &[], Purpose::Serve).is_empty());
 }
+
+#[test]
+fn tokens_and_secrets_need_safe_transport_and_length() {
+    let env = with(&[("FIRELIGHT_WEBHOOK_SECRET", "short")]);
+    assert!(
+        problems(&env, &[], Purpose::Serve)
+            .iter()
+            .any(|p| p.contains("webhook.secret") && p.contains("16 characters"))
+    );
+    let env = with(&[(
+        "FIRELIGHT_SOURCES",
+        r#"[{"id":"a","kind":"github","url":"http://github.com/acme/a"},
+            {"id":"b","kind":"git","url":"http://git.acme.example/b.git","token_file":"/run/t"},
+            {"id":"c","kind":"git","url":"http://localhost:8080/c.git","token_file":"/run/t"},
+            {"id":"d","kind":"git","url":"http://git.acme.example/d.git"}]"#,
+    )]);
+    let got = problems(&env, &[("/run/t", "tok")], Purpose::Serve).join("\n");
+    assert!(
+        got.contains("sources[0].url") && got.contains("https://github.com"),
+        "{got}"
+    );
+    assert!(
+        got.contains("sources[1].url") && got.contains("clear text"),
+        "{got}"
+    );
+    assert!(
+        !got.contains("sources[2].url"),
+        "loopback http is fine: {got}"
+    );
+    assert!(
+        !got.contains("sources[3].url"),
+        "anonymous http is allowed: {got}"
+    );
+}

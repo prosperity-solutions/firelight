@@ -4,6 +4,8 @@
 
 mod check;
 mod config;
+mod hub;
+mod sources;
 
 use std::process::ExitCode;
 
@@ -200,26 +202,28 @@ fn serve(cfg: Config) -> anyhow::Result<()> {
         .build()?;
     rt.block_on(async move {
         std::fs::create_dir_all(&cfg.data_dir).map_err(|e| {
-            anyhow::anyhow!(
-                "cannot create the data folder {}: {e}. Point FIRELIGHT_DATA_DIR at a writable folder.",
-                cfg.data_dir.display()
-            )
+            anyhow::anyhow!("cannot create the data folder {}: {e}. Point FIRELIGHT_DATA_DIR at a writable folder.", cfg.data_dir.display())
         })?;
         tracing::info!(version = VERSION, commit = COMMIT, "firelight starting");
-        let state = firelight_server::AppState::new();
+        let started = sources::start(&cfg).await?;
+        let mut state = firelight_server::AppState::new();
+        if let Some(w) = started.webhook {
+            state = state.with_webhook(w);
+        }
         let ready = state.clone();
-        firelight_server::serve(
-            cfg.listen,
-            state,
-            move |addr| {
-                tracing::info!(%addr, "listening");
-                // M1: nothing to load yet, so ready once listening. Later
-                // milestones flip this after the catalog and golden check (§3).
-                ready.set_ready(true);
-            },
-            firelight_server::shutdown_signal(),
-        )
-        .await?;
+        if started.warm {
+            tracing::info!("serving the cached catalog while the first pulls run");
+            ready.set_ready(true);
+        }
+        let hub = started.hub.clone();
+        let _wake_tx = started.wake_tx;
+        let interval = cfg.poll_interval;
+        let ready_after_pull = ready.clone();
+        tokio::spawn(hub.run(interval, started.wake, move || {
+            // A cold start is ready once every source was tried once (§3).
+            ready_after_pull.set_ready(true);
+        }));
+        firelight_server::serve(cfg.listen, state, move |addr| tracing::info!(%addr, "listening"), firelight_server::shutdown_signal()).await?;
         Ok(())
     })
 }
