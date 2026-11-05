@@ -17,7 +17,7 @@ firelight-source = { path = "../firelight-source" }
 base64 = "0.22"
 sha2 = "0.10"
 url = "2"
-rmcp = { version = "=3.8.0", default-features = false, features = ["server", "macros", "transport-streamable-http-server"] }
+rmcp = { version = "=3.8.0", default-features = false, features = ["server", "transport-streamable-http-server"] }
 schemars = "1"
 pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
 serde = { version = "1", features = ["derive"] }

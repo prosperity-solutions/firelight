@@ -21,7 +21,9 @@ use axum::response::{IntoResponse, Response};
 
 use crate::AppState;
 
-#[derive(Clone, Default)]
+/// The default refuses every Host (fail closed): an entry point that forgets
+/// to configure access serves nothing. Tests use [`Access::open`].
+#[derive(Clone)]
 pub struct Access {
     /// `ui = "basic"`: user and password.
     pub basic: Option<(String, String)>,
@@ -84,7 +86,28 @@ fn digest(b: &[u8]) -> [u8; 32] {
     sha2::Sha256::digest(b).into()
 }
 
+impl Default for Access {
+    fn default() -> Self {
+        Access {
+            basic: None,
+            tokens: None,
+            check_host: true,
+            hosts: Vec::new(),
+            loopback: false,
+            origins: Vec::new(),
+        }
+    }
+}
+
 impl Access {
+    /// No checks at all: for tests that drive the router without a Host.
+    pub fn open() -> Access {
+        Access {
+            check_host: false,
+            ..Access::default()
+        }
+    }
+
     /// Tokens as stored: blanks dropped (an unset variable in a rotation
     /// list must never make an empty bearer valid).
     pub fn with_tokens(mut self, tokens: Vec<String>) -> Access {

@@ -304,100 +304,132 @@ async fn spec(State(state): State<AppState>) -> Response {
     .into_response()
 }
 
-/// `/status` (M6 fills in the rest of §16.1).
+/// `/status` (§16.1): the same data as `/api/v1/status` and MCP `status`
+/// (already redacted by the content), as a page.
 async fn status(State(state): State<AppState>) -> Response {
-    let c = match content(&state) {
-        Ok(c) => c,
-        Err(r) => return r,
+    let Some(content) = state.content.clone() else {
+        return (StatusCode::SERVICE_UNAVAILABLE, "starting\n").into_response();
     };
-    let cat = c.catalog();
-    let mut m = H::new();
-    m.fmt(format_args!("<main class=\"status\"><h1>Status</h1>\n<p>Firelight v{}</p>\n<table><thead><tr><th>Repo</th><th>Commit</th><th>Date</th></tr></thead><tbody>\n", esc(&state.ui.version)));
-    for r in &cat.repos {
-        let src = c.source(&r.id);
-        let commit: String = src
-            .as_ref()
-            .map(|s| s.commit.chars().take(7).collect())
-            .unwrap_or_else(|| "built in".into());
-        let date = src
-            .and_then(|s| s.committed_at)
-            .map(|d| d.chars().take(10).collect::<String>())
-            .unwrap_or_default();
+    let ui = state.ui.clone();
+    let page = tokio::task::spawn_blocking(move || {
+        let c = content.as_ref();
+        let st = c.status();
+        let cat = c.catalog();
+        let s = |v: &serde_json::Value| -> String {
+            match v {
+                serde_json::Value::String(x) => x.clone(),
+                serde_json::Value::Null => String::new(),
+                other => other.to_string(),
+            }
+        };
+        let mut m = H::new();
         m.fmt(format_args!(
-            "<tr><td><a href=\"/r/{}\">{}</a></td><td><code>{}</code></td><td>{}</td></tr>\n",
-            attr(&r.id),
-            esc(&r.id),
-            esc(&commit),
-            esc(&date)
+            "<main class=\"status\"><h1>Status</h1>\n<p>Firelight v{}{}{}</p>\n",
+            esc(&ui.version),
+            st["started_at"].as_str().map(|t| format!(", started {}", esc(t))).unwrap_or_default(),
+            st["format_versions"].as_array().map(|v| format!(", format versions {}", esc(&v.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", ")))).unwrap_or_default(),
         ));
-    }
-    m.raw("</tbody></table>\n");
-    let stale = cat
-        .repos
-        .iter()
-        .flat_map(|r| r.entries.iter().map(move |e| (r, e)))
-        .filter(|(r, e)| !e.covers.is_empty() && c.staleness(&r.id, &e.path).is_some())
-        .count();
-    m.fmt(format_args!("<p>Maybe stale entries: {stale}</p>\n"));
-    let si = c.search_info();
-    m.raw("<h2>Search</h2>\n<table><tbody>\n");
-    let row = |m: &mut H, k: &str, v: &str| {
-        m.fmt(format_args!(
-            "<tr><th>{}</th><td>{}</td></tr>\n",
-            esc(k),
-            esc(v)
-        ));
-    };
-    row(&mut m, "Embedder", &si.backend);
-    if let Some(x) = &si.model {
-        row(&mut m, "Model", x);
-    }
-    if let Some(d) = si.dims {
-        row(&mut m, "Dimensions", &d.to_string());
-    }
-    row(
-        &mut m,
-        "Chunks embedded",
-        &format!("{} of {}", si.embedded, si.chunks),
-    );
-    if let Some(ms) = si.last_index_ms {
-        row(&mut m, "Last index", &format!("{ms} ms"));
-    }
-    row(&mut m, "Built-in golden check", &si.builtin);
-    if let Some(p) = &si.problem {
-        row(&mut m, "Problem", p);
-    }
-    m.raw("</tbody></table>\n");
-    if !si.golden_failures.is_empty() {
-        m.raw("<h3>Golden questions that don't pass</h3><ul>\n");
-        for (repo, line) in &si.golden_failures {
+        m.raw("<h2>Sources</h2>\n<table><thead><tr><th>Repo</th><th>From</th><th>Serving</th><th>Last pull</th><th>Health</th></tr></thead><tbody>\n");
+        let sources = st["sources"].as_array().cloned().unwrap_or_default();
+        for src in &sources {
+            let id = s(&src["id"]);
+            let commit: String = s(&src["commit"]).chars().take(7).collect();
+            let newest: String = s(&src["newest_commit"]).chars().take(7).collect();
+            let serving = if !newest.is_empty() && newest != commit {
+                format!("{commit} (newest {newest} isn't served: it fails its checks or couldn't be read; the last good commit stays)")
+            } else {
+                commit
+            };
+            let pulled = match (src["last_pull_at"].as_str(), src["last_pull_ms"].as_i64()) {
+                (Some(t), Some(ms)) => format!("{t} ({ms} ms)"),
+                (Some(t), None) => t.to_string(),
+                _ => String::new(),
+            };
+            let from = format!("{} {}{}", s(&src["kind"]), s(&src["url"]), src["ref"].as_str().map(|r| format!(" @ {r}")).unwrap_or_default());
             m.fmt(format_args!(
-                "<li><code>{}</code>: {}</li>\n",
-                esc(repo),
-                esc(line)
+                "<tr><td><a href=\"/r/{}\">{}</a></td><td><code>{}</code></td><td><code>{}</code></td><td>{}</td><td>{}</td></tr>\n",
+                attr(&id), esc(&id), esc(&from), esc(&serving), esc(&pulled), esc(&s(&src["health"])),
             ));
         }
-        m.raw("</ul>\n");
-    }
-    if !cat.diagnostics.is_empty() {
-        m.raw("<h2>Warnings</h2><ul>\n");
-        for (repo, d) in &cat.diagnostics {
+        for r in cat.repos.iter().filter(|r| !sources.iter().any(|x| x["id"] == serde_json::json!(r.id))) {
             m.fmt(format_args!(
-                "<li><code>{}</code>: {}</li>\n",
-                esc(repo),
-                esc(&d.to_string())
+                "<tr><td><a href=\"/r/{}\">{}</a></td><td>built in</td><td></td><td></td><td>ok</td></tr>\n",
+                attr(&r.id), esc(&r.id)
             ));
         }
-        m.raw("</ul>\n");
+        m.raw("</tbody></table>\n");
+        // Problems per source: why the newest commit isn't served, warnings.
+        for src in &sources {
+            let mut lines: Vec<String> = Vec::new();
+            if let Some(e) = src["last_pull_error"].as_str() {
+                lines.push(format!("pull: {e}"));
+            }
+            for d in src["errors"].as_array().into_iter().flatten().chain(src["warnings"].as_array().into_iter().flatten()) {
+                lines.push(format!("{}:{}:{}: {}: {}", s(&d["path"]), s(&d["line"]), s(&d["col"]), s(&d["severity"]), s(&d["message"])));
+            }
+            if !lines.is_empty() {
+                m.fmt(format_args!("<h3><code>{}</code></h3><ul>\n", esc(&s(&src["id"]))));
+                for l in lines {
+                    m.fmt(format_args!("<li>{}</li>\n", esc(&l)));
+                }
+                m.raw("</ul>\n");
+            }
+        }
+        if !cat.diagnostics.is_empty() {
+            m.raw("<h2>Catalog warnings</h2><ul>\n");
+            for (repo, d) in &cat.diagnostics {
+                m.fmt(format_args!("<li><code>{}</code>: {}</li>\n", esc(repo), esc(&d.to_string())));
+            }
+            m.raw("</ul>\n");
+        }
+        m.fmt(format_args!("<p>Maybe stale entries: {}</p>\n", st["maybe_stale"].as_u64().unwrap_or(0)));
+        let e = &st["embedder"];
+        m.raw("<h2>Search</h2>\n<table><tbody>\n");
+        let row = |m: &mut H, k: &str, v: &str| {
+            if !v.is_empty() {
+                m.fmt(format_args!("<tr><th>{}</th><td>{}</td></tr>\n", esc(k), esc(v)));
+            }
+        };
+        row(&mut m, "Embedder", &s(&e["backend"]));
+        row(&mut m, "Model", &s(&e["model"]));
+        row(&mut m, "Dimensions", &s(&e["dims"]));
+        if e["chunks"].is_number() {
+            row(&mut m, "Chunks embedded", &format!("{} of {}", s(&e["chunks_embedded"]), s(&e["chunks"])));
+        }
+        row(&mut m, "Last index", &e["last_index_ms"].as_u64().map(|x| format!("{x} ms")).unwrap_or_default());
+        row(&mut m, "Problem", &s(&e["problem"]));
+        row(&mut m, "Built-in golden check", &s(&st["golden"]["builtin"]));
+        m.raw("</tbody></table>\n");
+        let fails = st["golden"]["failures"].as_array().cloned().unwrap_or_default();
+        if !fails.is_empty() {
+            m.raw("<h3>Golden questions that don't pass</h3><ul>\n");
+            for f in &fails {
+                m.fmt(format_args!("<li><code>{}</code>: {}</li>\n", esc(&s(&f["repo"])), esc(&s(&f["question"]))));
+            }
+            m.raw("</ul>\n");
+        }
+        if st["database"].is_object() {
+            m.fmt(format_args!(
+                "<h2>Database</h2>\n<p>{} bytes, schema version {}</p>\n",
+                s(&st["database"]["size_bytes"]), s(&st["database"]["schema_version"])
+            ));
+        }
+        if let Some(cfg) = st["config"].as_array() {
+            m.raw("<h2>Configuration</h2>\n<table><thead><tr><th>Key</th><th>Value</th><th>From</th></tr></thead><tbody>\n");
+            for r in cfg {
+                m.fmt(format_args!(
+                    "<tr><td><code>{}</code></td><td><code>{}</code></td><td>{}</td></tr>\n",
+                    esc(&s(&r["key"])), esc(&s(&r["value"])), esc(&s(&r["from"]))
+                ));
+            }
+            m.raw("</tbody></table>\n");
+        }
+        m.raw("</main>");
+        pages::layout(&ui, &cat, c, None, "Status", &m.finish())
+    })
+    .await;
+    match page {
+        Ok(p) => Html(p).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
-    m.raw("</main>");
-    Html(pages::layout(
-        &state.ui,
-        &cat,
-        c,
-        None,
-        "Status",
-        &m.finish(),
-    ))
-    .into_response()
 }

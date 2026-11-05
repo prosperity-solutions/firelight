@@ -417,3 +417,91 @@ fn serve(cfg: Config) -> anyhow::Result<()> {
         Ok(())
     })
 }
+
+#[cfg(test)]
+mod redaction_tests {
+    //! §17.1: secrets never reach the status (API, MCP, page) in any form.
+    use std::collections::BTreeMap;
+    use std::path::{Path, PathBuf};
+    use std::sync::Arc;
+
+    use super::*;
+
+    const SECRETS: &[&str] = &[
+        "pw-0123456789-secret",
+        "tok-old-0123456789abcdef",
+        "tok-new-0123456789abcdef",
+        "hook-0123456789-secret",
+        "sk-embed-0123456789",
+        "qtok-0123456789",
+        "userinfo-pass-0123",
+    ];
+
+    #[test]
+    fn status_never_shows_a_secret() {
+        let env: BTreeMap<String, String> = [
+            ("FIRELIGHT_SERVER_PUBLIC_URL", "https://firelight.acme.example"),
+            ("FIRELIGHT_AUTH_UI", "basic"),
+            ("FIRELIGHT_AUTH_USER", "ops"),
+            ("FIRELIGHT_AUTH_PASSWORD", "pw-0123456789-secret"),
+            ("FIRELIGHT_AUTH_MCP", "token"),
+            ("FIRELIGHT_AUTH_MCP_TOKENS", r#"["tok-old-0123456789abcdef","tok-new-0123456789abcdef"]"#),
+            ("FIRELIGHT_WEBHOOK_SECRET", "hook-0123456789-secret"),
+            ("FIRELIGHT_EMBEDDER", "openai-compatible"),
+            ("FIRELIGHT_EMBED_BASE_URL", "https://llm.acme.example/v1?key=qtok-0123456789"),
+            ("FIRELIGHT_EMBED_API_KEY", "sk-embed-0123456789"),
+            ("FIRELIGHT_SOURCES", r#"[{"id":"infra","kind":"git","url":"https://git.acme.example/infra.git?private_token=qtok-0123456789"}]"#),
+        ]
+        .iter()
+        .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
+        .collect();
+        let inputs = config::Inputs {
+            env,
+            read: Box::new(|_p: &Path| {
+                Err(std::io::Error::new(std::io::ErrorKind::NotFound, "none"))
+            }),
+            exists: Box::new(|_p: &Path| false),
+        };
+        let cfg = match config::load(&inputs, Purpose::Serve) {
+            Ok(c) => c,
+            Err(p) => panic!("this config should load: {} problems", p.0.len()),
+        };
+        let extra = status_extra(&cfg).to_string();
+        let store = firelight_store::Store::memory().unwrap_or_else(|e| panic!("{e}"));
+        let puller = firelight_source::pull::Puller {
+            git: firelight_source::git::Git::default(),
+            data_dir: PathBuf::from("/nonexistent"),
+            limits: firelight_format::Limits::default(),
+            clock: Arc::new(firelight_source::SystemClock),
+        };
+        let specs = firelight_source::pull::SourceSpec {
+            id: "infra".into(),
+            origin: firelight_source::pull::Origin::Git {
+                url: "https://u:userinfo-pass-0123@git.acme.example/infra.git?private_token=qtok-0123456789".into(),
+                git_ref: None,
+                creds: firelight_source::pull::Credentials::Anonymous,
+            },
+        };
+        let hub = hub::Hub::new(
+            vec![specs],
+            puller,
+            store,
+            firelight_format::Limits::default(),
+            true,
+            "off",
+        );
+        hub.search.set_problem(Some(
+            "POST https://u:userinfo-pass-0123@llm.acme.example/v1?key=qtok-0123456789: refused"
+                .into(),
+        ));
+        let status = hub.status_json().to_string();
+        for s in SECRETS {
+            assert!(
+                !extra.contains(s),
+                "config in the status shows {s}: {extra}"
+            );
+            assert!(!status.contains(s), "the status shows {s}: {status}");
+        }
+        assert!(extra.contains("••••"), "secrets show as ••••: {extra}");
+    }
+}

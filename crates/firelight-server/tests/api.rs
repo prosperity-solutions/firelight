@@ -34,7 +34,11 @@ fn app() -> axum::Router {
         version: "0.0.0-test".into(),
         ..Ui::default()
     };
-    router(AppState::new().with_content(c, ui, "#d9541e"))
+    router(
+        AppState::new()
+            .with_content(c, ui, "#d9541e")
+            .with_access(firelight_server::auth::Access::open()),
+    )
 }
 
 async fn get(app: &axum::Router, p: &str) -> (StatusCode, serde_json::Value) {
@@ -90,6 +94,8 @@ async fn errors() {
         ("/api/v1/entries/acme-infra/nope", StatusCode::NOT_FOUND),
         ("/api/v1/entries/Bad_Repo/x", StatusCode::BAD_REQUEST),
         ("/api/v1/repos/nope", StatusCode::NOT_FOUND),
+        ("/api/v1/search?q=x&repo=nope", StatusCode::BAD_REQUEST),
+        ("/api/v1/entries/acme-infra/%FF", StatusCode::BAD_REQUEST),
     ] {
         let (s, v) = get(&app, p).await;
         assert_eq!(s, want, "{p}: {v}");

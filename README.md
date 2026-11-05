@@ -26,6 +26,30 @@ agent. Content never lives in Firelight: git is the truth, Firelight is a lens.
 2. `veld start firelight` (the acme fixtures, word search only, ready in seconds).
 3. Open the URL it prints. `just test` runs the tests; `firelight preview .` shows any repo's `.firelight/` with live reload.
 
+## Connect your agent
+
+Firelight is an MCP server at `/mcp` (streamable HTTP). In Claude Code:
+
+```sh
+claude mcp add --transport http firelight https://firelight.acme.example/mcp \
+  --header "Authorization: Bearer <your token>"
+```
+
+Eight read-only tools (`search`, `list_entries`, `get_entry`, `find_link`,
+`list_spaces`, `list_repos`, `get_repo`, `status`), the format reference and
+the onboarding prompt. Every answer says which repo and commit it came from.
+The same answers are plain JSON under `/api/v1` (`search`, `entries`,
+`links`, `spaces`, `repos`, `status`).
+
+**Who may ask:** pick `FIRELIGHT_AUTH_UI` (`basic` or `none`) and
+`FIRELIGHT_AUTH_MCP` (`token` or `none`) explicitly; a token never opens the
+page, and the page login never opens `/mcp`. Every route but `/healthz`,
+`/readyz` and the webhook answers only to the host in `server.public_url`
+(plus `server.allowed_hosts`, e.g. a Service name for in-cluster clients),
+so a reverse proxy must pass the client's `Host` header (nginx:
+`proxy_set_header Host $host;`), or you get 421. Browsers may call `/mcp`
+only from `server.allowed_origins` (default: the public URL's origin).
+
 ## Search and the model
 
 Search ranks by words (SQLite FTS5) and by meaning (an embedding model), and

@@ -86,6 +86,15 @@ fn check_space(cat: &Catalog, space: Option<&str>) -> std::result::Result<String
     }
 }
 
+fn check_repo(cat: &Catalog, repo: Option<&str>) -> std::result::Result<(), Error> {
+    match repo {
+        Some(r) if cat.repo(r).is_none() => Err(Error::BadInput(format!(
+            "there is no repo {r:?}; list_repos names them"
+        ))),
+        _ => Ok(()),
+    }
+}
+
 fn parse_kind(k: Option<&str>) -> std::result::Result<Option<Kind>, Error> {
     match k {
         None | Some("") => Ok(None),
@@ -112,6 +121,7 @@ pub fn search(
         return Err(Error::BadInput("query is empty".into()));
     }
     let limit = limit.unwrap_or(10).clamp(1, MAX_LIMIT);
+    check_repo(&cat, repo)?;
     let filter = Filter {
         space: Some(space.clone()),
         repos: repo.map(|r| BTreeSet::from([r.to_string()])),
@@ -173,7 +183,9 @@ pub fn list_entries(
     if kind == Some(Kind::Link) || kind == Some(Kind::Repo) {
         return Err(Error::BadInput("entries are concepts or guides".into()));
     }
+    check_repo(&cat, repo)?;
     let mut out = Vec::new();
+    let mut truncated = false;
     for r in cat.repos.iter().filter(|r| repo.is_none_or(|x| x == r.id)) {
         for e in &r.entries {
             let rf = Ref {
@@ -190,6 +202,7 @@ pub fn list_entries(
                 continue;
             }
             if out.len() >= MAX_ITEMS {
+                truncated = true;
                 break;
             }
             out.push(json!({
@@ -199,7 +212,12 @@ pub fn list_entries(
             }));
         }
     }
-    Ok(json!({ "space": space, "entries": out }))
+    let mut v = json!({ "space": space, "entries": out });
+    if truncated {
+        v["truncated"] = json!(true);
+        v["hint"] = json!("more entries exist: narrow by space, repo, kind or tag");
+    }
+    Ok(v)
 }
 
 /// `get_entry`: one entry in full.
@@ -308,6 +326,7 @@ pub fn find_link(
         .map(|q| firelight_search::words(&q.chars().take(200).collect::<String>()))
         .unwrap_or_default();
     let mut out = Vec::new();
+    let mut truncated = false;
     for (r, sp, isl, cd, sec) in placed {
         if island.is_some_and(|x| !lower(&isl).contains(&lower(x))) {
             continue;
@@ -332,6 +351,7 @@ pub fn find_link(
             }
         }
         if out.len() >= MAX_ITEMS {
+            truncated = true;
             break;
         }
         let place: Vec<String> = [Some(isl), cd, sec].into_iter().flatten().collect();
@@ -342,7 +362,12 @@ pub fn find_link(
             "repo": r.repo, "commit": c.commit(&r.repo),
         }));
     }
-    Ok(json!({ "space": space, "links": out }))
+    let mut v = json!({ "space": space, "links": out });
+    if truncated {
+        v["truncated"] = json!(true);
+        v["hint"] = json!("more links exist: narrow by query, space, island or card");
+    }
+    Ok(v)
 }
 
 /// `list_spaces`.

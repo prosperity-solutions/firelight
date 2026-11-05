@@ -141,9 +141,16 @@ pub fn call(ctx: &Ctx<'_>, name: &str, a: &Map<String, Value>) -> data::Result {
             arg(a, "space"),
             arg(a, "kind"),
             arg(a, "repo"),
-            a.get("limit")
-                .and_then(Value::as_u64)
-                .and_then(|n| usize::try_from(n).ok()),
+            match a.get("limit") {
+                None | Some(Value::Null) => None,
+                Some(v) => Some(
+                    v.as_u64()
+                        .and_then(|n| usize::try_from(n).ok())
+                        .ok_or_else(|| {
+                            Error::BadInput("limit must be a whole number from 1 to 25".into())
+                        })?,
+                ),
+            },
         ),
         "list_entries" => data::list_entries(
             ctx,
@@ -191,7 +198,11 @@ impl Mcp {
     pub fn service(self) -> StreamableHttpService<Mcp, LocalSessionManager> {
         let cfg = StreamableHttpServerConfig::default()
             .disable_allowed_hosts()
-            .with_sse_keep_alive(None);
+            .with_sse_keep_alive(None)
+            // Stateless with JSON responses: no sessions to pile up, no
+            // never-ending SSE stream on GET (405), nothing to hold shutdown.
+            .with_legacy_session_mode(false)
+            .with_json_response(true);
         StreamableHttpService::new(
             move || Ok(self.clone()),
             Arc::new(LocalSessionManager::default()),
@@ -210,6 +221,10 @@ impl ServerHandler for Mcp {
                 .build(),
         )
         .with_instructions(INSTRUCTIONS)
+        .with_server_info(rmcp::model::Implementation::new(
+            "firelight",
+            self.version.clone(),
+        ))
     }
 
     async fn list_tools(

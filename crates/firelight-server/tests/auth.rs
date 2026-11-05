@@ -382,3 +382,44 @@ async fn mcp_is_one_exact_path() {
         );
     }
 }
+
+#[tokio::test]
+async fn mcp_is_stateless_json() {
+    let app = app(access(false, true));
+    // No standalone SSE stream: GET and DELETE are 405 once the token passes.
+    for m in [Method::GET, Method::DELETE] {
+        let r = R {
+            method: m.clone(),
+            ..R::get("/mcp")
+        }
+        .bearer(T1);
+        assert_eq!(r.status(&app).await, StatusCode::METHOD_NOT_ALLOWED, "{m}");
+    }
+}
+
+#[tokio::test]
+async fn webhook_and_api_rules() {
+    let app = app(access(true, true));
+    // The webhook has its HMAC; no Host check, no login (404: none configured).
+    let r = R {
+        method: Method::POST,
+        ..R::get("/webhook/github")
+    }
+    .host(None);
+    assert_eq!(r.status(&app).await, StatusCode::NOT_FOUND);
+    // The API is behind the Host check like the page.
+    assert_eq!(
+        R::get("/api/v1/spaces")
+            .host(Some("evil.example"))
+            .status(&app)
+            .await,
+        StatusCode::MISDIRECTED_REQUEST
+    );
+    assert_eq!(
+        R::get("/__live")
+            .host(Some("evil.example"))
+            .status(&app)
+            .await,
+        StatusCode::MISDIRECTED_REQUEST
+    );
+}

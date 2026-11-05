@@ -468,6 +468,9 @@ mod tests {
         assert_eq!(status(&s, "/readyz").await, StatusCode::SERVICE_UNAVAILABLE);
         s.set_ready(true);
         assert_eq!(status(&s, "/readyz").await, StatusCode::OK);
-        assert_eq!(status(&s, "/nope").await, StatusCode::NOT_FOUND);
+        // Without configured access every other path is refused (fail closed).
+        assert_eq!(status(&s, "/nope").await, StatusCode::MISDIRECTED_REQUEST);
+        let open = AppState::new().with_access(auth::Access::open());
+        assert_eq!(status(&open, "/nope").await, StatusCode::NOT_FOUND);
     }
 }

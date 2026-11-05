@@ -554,7 +554,11 @@ pub fn scrub_urls(s: &str) -> String {
             .unwrap_or(tail.len());
         let url = &tail[..end];
         let cut = url.find(['?', '#']).unwrap_or(url.len());
-        out.push_str(&url[..cut]);
+        let url = &url[..cut];
+        // `user:pass@host`: keep only what follows the last `@` of the authority.
+        let auth_end = url.find('/').unwrap_or(url.len());
+        let start = url[..auth_end].rfind('@').map_or(0, |i| i + 1);
+        out.push_str(&url[start..]);
         rest = &tail[end..];
     }
     out.push_str(rest);

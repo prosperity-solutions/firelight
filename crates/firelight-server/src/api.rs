@@ -14,6 +14,7 @@
 use std::collections::BTreeMap;
 
 use axum::Router;
+use axum::extract::rejection::PathRejection;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -23,7 +24,24 @@ use serde_json::json;
 use crate::AppState;
 use crate::data::{self, Ctx, Error};
 
-type Q = Query<BTreeMap<String, String>>;
+/// Query parameters; malformed ones (bad percent-encoding) are a JSON 400.
+struct Q(BTreeMap<String, String>);
+
+impl<S: Send + Sync> axum::extract::FromRequestParts<S> for Q {
+    type Rejection = Response;
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        _state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        Query::<BTreeMap<String, String>>::try_from_uri(&parts.uri)
+            .map(|q| Q(q.0))
+            .map_err(|_| bad("the query string is malformed"))
+    }
+}
+
+fn bad(msg: &str) -> Response {
+    (StatusCode::BAD_REQUEST, axum::Json(json!({ "error": msg }))).into_response()
+}
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -76,7 +94,7 @@ fn opt(q: &BTreeMap<String, String>, k: &str) -> Option<String> {
     q.get(k).filter(|v| !v.is_empty()).cloned()
 }
 
-async fn search(State(s): State<AppState>, Query(q): Q) -> Response {
+async fn search(State(s): State<AppState>, Q(q): Q) -> Response {
     let limit = match opt(&q, "limit").map(|l| l.parse::<usize>()) {
         Some(Err(_)) => {
             return (
@@ -101,7 +119,7 @@ async fn search(State(s): State<AppState>, Query(q): Q) -> Response {
     .await
 }
 
-async fn entries(State(s): State<AppState>, Query(q): Q) -> Response {
+async fn entries(State(s): State<AppState>, Q(q): Q) -> Response {
     answer(s, move |c| {
         data::list_entries(
             c,
@@ -114,11 +132,17 @@ async fn entries(State(s): State<AppState>, Query(q): Q) -> Response {
     .await
 }
 
-async fn entry(State(s): State<AppState>, Path((repo, id)): Path<(String, String)>) -> Response {
+async fn entry(
+    State(s): State<AppState>,
+    p: Result<Path<(String, String)>, PathRejection>,
+) -> Response {
+    let Ok(Path((repo, id))) = p else {
+        return bad("the path is malformed");
+    };
     answer(s, move |c| data::get_entry(c, &format!("{repo}/{id}"))).await
 }
 
-async fn links(State(s): State<AppState>, Query(q): Q) -> Response {
+async fn links(State(s): State<AppState>, Q(q): Q) -> Response {
     answer(s, move |c| {
         data::find_link(
             c,
@@ -139,7 +163,10 @@ async fn repos(State(s): State<AppState>) -> Response {
     answer(s, data::list_repos).await
 }
 
-async fn repo(State(s): State<AppState>, Path(id): Path<String>) -> Response {
+async fn repo(State(s): State<AppState>, p: Result<Path<String>, PathRejection>) -> Response {
+    let Ok(Path(id)) = p else {
+        return bad("the path is malformed");
+    };
     answer(s, move |c| data::get_repo(c, &id)).await
 }
 
