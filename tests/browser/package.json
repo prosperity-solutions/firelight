@@ -8,6 +8,7 @@
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",
     "@playwright/test": "1.64.1",
-    "ajv": "8.20.0"
+    "ajv": "8.20.0",
+    "skills": "1.7.4"
   }
 }

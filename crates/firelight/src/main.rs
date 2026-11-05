@@ -4,10 +4,13 @@
 
 mod check;
 mod config;
+mod covers;
 mod hub;
 mod preview;
 mod search;
+mod skills;
 mod sources;
+mod telemetry;
 
 use std::process::ExitCode;
 use std::sync::Arc;
@@ -56,6 +59,10 @@ enum Command {
         /// The embedder for meaning search (`off` for speed).
         #[arg(long)]
         embedder: Option<String>,
+        /// Build everything once, run the golden questions, report and exit
+        /// (non-zero on any error or failing question). No server.
+        #[arg(long)]
+        check: bool,
     },
     /// Validate .firelight/ folders: no network, no model. Errors as path:line:col.
     Check {
@@ -67,6 +74,31 @@ enum Command {
         /// Unresolved cross-repo refs are errors, not warnings.
         #[arg(long)]
         strict: bool,
+    },
+    /// The skill topics (how to write and check .firelight/), or install the skill.
+    Skills {
+        /// A topic: format, writing, onboarding, ci, mcp, config.
+        topic: Option<String>,
+        /// List the topics as JSON.
+        #[arg(long)]
+        json: bool,
+        /// With `install`: write into this repo (.agents/skills, .claude/skills), not your home.
+        #[arg(long)]
+        project: bool,
+    },
+    /// In a PR: entries whose `covers` paths changed while the entry didn't.
+    Covers {
+        /// The PR's base ref (e.g. origin/main).
+        #[arg(long)]
+        base: String,
+        /// The repo (default: the current folder).
+        dir: Option<std::path::PathBuf>,
+        /// Fail (exit 1) instead of warning.
+        #[arg(long)]
+        strict: bool,
+        /// Print JSON.
+        #[arg(long)]
+        json: bool,
     },
     /// Write the JSON Schemas of every .firelight/ YAML file (default: print the file names).
     #[command(hide = true)]
@@ -153,9 +185,19 @@ fn main() -> ExitCode {
             dirs,
             listen,
             embedder,
+            check,
         } => {
             let format = std::env::var("FIRELIGHT_LOG_FORMAT").unwrap_or_else(|_| "pretty".into());
-            init_logging_with("info", &format);
+            let _telemetry = init_logging_with(if check { "warn" } else { "info" }, &format);
+            if check {
+                return match preview::check(dirs, embedder.as_deref()) {
+                    Ok(code) => code,
+                    Err(e) => {
+                        eprintln!("firelight preview --check: {e:#}");
+                        ExitCode::from(2)
+                    }
+                };
+            }
             match preview::run(preview::Args {
                 dirs,
                 listen,
@@ -169,6 +211,25 @@ fn main() -> ExitCode {
             }
         }
         Command::Check { dirs, json, strict } => check::run(check::Args { dirs, json, strict }),
+        Command::Skills {
+            topic,
+            json,
+            project,
+        } => match topic.as_deref() {
+            Some("install") => skills::run_install(project),
+            t => skills::show(t, json),
+        },
+        Command::Covers {
+            base,
+            dir,
+            strict,
+            json,
+        } => covers::run(covers::Args {
+            base,
+            dir,
+            strict,
+            json,
+        }),
         Command::Schema { out } => {
             let all = firelight_format::schema::all();
             match out {
@@ -198,7 +259,7 @@ fn main() -> ExitCode {
                 Ok(c) => c,
                 Err(code) => return code,
             };
-            init_logging(&cfg);
+            let _telemetry = init_logging(&cfg);
             match serve(cfg) {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(e) => {
@@ -219,20 +280,12 @@ fn load(purpose: Purpose) -> Result<Config, ExitCode> {
     })
 }
 
-fn init_logging(cfg: &Config) {
-    init_logging_with(&cfg.log_level, &cfg.log_format);
+fn init_logging(cfg: &Config) -> telemetry::Guard {
+    telemetry::init(&cfg.log_level, &cfg.log_format)
 }
 
-fn init_logging_with(level: &str, format: &str) {
-    let filter = tracing_subscriber::EnvFilter::new(format!("{level},hyper=warn"));
-    let b = tracing_subscriber::fmt()
-        .with_env_filter(filter)
-        .with_writer(std::io::stdout);
-    if format == "pretty" {
-        b.init();
-    } else {
-        b.json().flatten_event(true).with_current_span(false).init();
-    }
+fn init_logging_with(level: &str, format: &str) -> telemetry::Guard {
+    telemetry::init(level, format)
 }
 
 /// Who may ask what (§10), from the config.
@@ -323,7 +376,7 @@ fn serve(cfg: Config) -> anyhow::Result<()> {
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
-    rt.block_on(async move {
+    let res = rt.block_on(async move {
         std::fs::create_dir_all(&cfg.data_dir).map_err(|e| {
             anyhow::anyhow!("cannot create the data folder {}: {e}. Point FIRELIGHT_DATA_DIR at a writable folder.", cfg.data_dir.display())
         })?;
@@ -337,6 +390,7 @@ fn serve(cfg: Config) -> anyhow::Result<()> {
             mcp_token: cfg.mcp_auth == config::McpAuth::Token,
             live: false,
         };
+        started.hub.search.record_queries.store(cfg.otel_record_queries, Ordering::Relaxed);
         if let Ok(mut x) = started.hub.status_extra.write() {
             *x = status_extra(&cfg);
         }
@@ -415,7 +469,11 @@ fn serve(cfg: Config) -> anyhow::Result<()> {
             Ok(e) = fail_rx => anyhow::bail!("the embedder can't start: {e}"),
         }
         Ok(())
-    })
+    });
+    // Don't wait for an embedding batch to finish: telemetry still flushes,
+    // and Kubernetes' grace period isn't spent on work a restart redoes.
+    rt.shutdown_timeout(std::time::Duration::from_secs(5));
+    res
 }
 
 #[cfg(test)]

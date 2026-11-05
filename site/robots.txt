@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://firelight.oss.life.li/sitemap.xml

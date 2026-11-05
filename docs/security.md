@@ -70,7 +70,8 @@ harden-runner egress blocking, the 7-day dependency-age rule (`tools/depage`),
 stamp.
 
 **Egress on macOS:** harden-runner's block mode only enforces on Linux runners,
-so the two macOS build jobs have no egress control.
+so the macOS jobs have no egress control: the two macOS builds and the
+macOS installer test (which reaches only GitHub and 127.0.0.1).
 
 **What is not stopped:** anyone with push access to a branch can run a workflow
 with whatever the workflow token allows there, for example push a package

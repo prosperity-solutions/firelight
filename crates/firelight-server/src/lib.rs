@@ -11,6 +11,7 @@ pub mod data;
 pub mod html;
 pub mod markdown;
 pub mod mcp;
+pub mod metrics;
 pub mod onboarding;
 pub mod pages;
 mod routes;
@@ -127,6 +128,25 @@ pub fn router(state: AppState) -> Router {
     open.merge(checked)
         .with_state(state)
         .layer(axum::middleware::from_fn(routes::security_headers))
+        .layer(axum::middleware::from_fn(http_span))
+}
+
+/// One span per HTTP request (§17.2): method, path, status. Never the query
+/// string (it may hold a search).
+async fn http_span(
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    use tracing::Instrument as _;
+    let span = tracing::info_span!(
+        "http.request",
+        http.request.method = %req.method(),
+        url.path = %req.uri().path(),
+        http.response.status_code = tracing::field::Empty,
+    );
+    let res = next.run(req).instrument(span.clone()).await;
+    span.record("http.response.status_code", res.status().as_u16());
+    res
 }
 
 /// `/mcp`, exactly (no nesting, so `/mcp/x` or `//mcp` never reach it).

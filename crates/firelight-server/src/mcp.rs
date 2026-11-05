@@ -242,12 +242,25 @@ impl ServerHandler for Mcp {
     ) -> Result<CallToolResponse, rmcp::ErrorData> {
         let args = request.arguments.unwrap_or_default();
         let name = request.name.to_string();
+        // Only known tool names reach metrics and traces (a client chooses
+        // the name; unknown ones would flood both).
+        let known = tools().iter().any(|t| t.name == name);
+        let label = if known {
+            name.clone()
+        } else {
+            "unknown".to_string()
+        };
+        crate::metrics::get()
+            .mcp_calls
+            .add(1, &[opentelemetry::KeyValue::new("tool", label.clone())]);
+        let span = tracing::info_span!("mcp.tool", tool = %label);
         let (content, base, version) = (
             self.content.clone(),
             self.base.clone(),
             self.version.clone(),
         );
         let res = tokio::task::spawn_blocking(move || {
+            let _in = span.enter();
             let ctx = Ctx {
                 content: content.as_ref(),
                 base: &base,

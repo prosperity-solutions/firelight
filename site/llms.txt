@@ -1,0 +1,21 @@
+# Firelight
+
+> The docs your repos write about themselves: each repo describes itself in a small `.firelight/` folder, and Firelight serves all of them as a link page, a help center, a search by words and meaning, and a read-only MCP server.
+
+Install the CLI: `curl -fsSL https://firelight.oss.life.li/install.sh | sh`. Every topic below is also built into the binary: `firelight skills <topic>`.
+
+## Docs
+
+- [format](https://firelight.oss.life.li/llms-full.txt#format): the .firelight/ format: every file and field
+- [writing](https://firelight.oss.life.li/llms-full.txt#writing): what good concepts, guides, links and relations look like
+- [onboarding](https://firelight.oss.life.li/llms-full.txt#onboarding): set a repo up for Firelight (the onboarding prompt)
+- [ci](https://firelight.oss.life.li/llms-full.txt#ci): the GitHub Action and the local checks
+- [mcp](https://firelight.oss.life.li/llms-full.txt#mcp): the MCP tools and how to use them
+- [config](https://firelight.oss.life.li/llms-full.txt#config): every server setting and its environment variable
+- [Self-hosting](https://github.com/prosperity-solutions/firelight/blob/main/docs/self-hosting.md): run a Firelight server with Docker, Compose or Helm
+- [Install](https://github.com/prosperity-solutions/firelight/blob/main/docs/install.md): the CLI installer and how it verifies downloads
+
+## Optional
+
+- [Everything above in one file](https://firelight.oss.life.li/llms-full.txt)
+- [Source](https://github.com/prosperity-solutions/firelight)

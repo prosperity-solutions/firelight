@@ -212,6 +212,8 @@ pub struct Search {
     status: RwLock<Status>,
     /// The built-in golden check passed (or was skipped).
     pub golden_ok: AtomicBool,
+    /// `otel.record_queries`: put the query text on search spans.
+    pub record_queries: AtomicBool,
     generation: AtomicUsize,
 }
 
@@ -270,6 +272,7 @@ impl Search {
                 repo_results: Vec::new(),
             }),
             golden_ok: AtomicBool::new(false),
+            record_queries: AtomicBool::new(false),
             generation: AtomicUsize::new(0),
         }
     }
@@ -347,11 +350,34 @@ impl Search {
         let _ = self.wake.send(g);
     }
 
-    /// Search the current index.
+    /// Search the current index. The span records the query's length and the
+    /// result count; the text only with `otel.record_queries` (§17.2).
     pub fn search(&self, q: &str, f: &Filter, limit: usize) -> Vec<Hit> {
+        let started = Instant::now();
+        let span = tracing::info_span!(
+            "search",
+            query.length = q.chars().count(),
+            query.text = tracing::field::Empty,
+            results = tracing::field::Empty,
+            meaning = tracing::field::Empty,
+        );
+        let _in = span.enter();
+        if self.record_queries.load(Ordering::Relaxed) {
+            span.record("query.text", q);
+        }
         let idx = self.index();
         let v = self.query_vec(&idx, q);
-        idx.search(q, f, limit, v.as_deref())
+        span.record("meaning", v.is_some());
+        let hits = idx.search(q, f, limit, v.as_deref());
+        span.record("results", hits.len());
+        let m = firelight_server::metrics::get();
+        m.search_duration
+            .record(started.elapsed().as_secs_f64(), &[]);
+        m.search_results.record(hits.len() as u64, &[]);
+        if hits.is_empty() {
+            m.search_zero_results.add(1, &[]);
+        }
+        hits
     }
 
     /// The query's vector, if meaning search can help now. Never waits more
@@ -438,11 +464,13 @@ impl Search {
             let mut did = 0usize;
             let idx = self.index();
             let refused = self.refused.lock().map(|r| r.clone()).unwrap_or_default();
+            let m = firelight_server::metrics::get();
             let missing: Vec<([u8; 32], String)> = idx
                 .missing()
                 .into_iter()
                 .filter(|(h, _)| !refused.contains(h))
                 .collect();
+            m.chunks_pending.record(missing.len() as u64, &[]);
             let mut outage = false;
             for batch in missing.chunks(BATCH) {
                 if !Arc::ptr_eq(&idx, &self.index()) {
@@ -484,6 +512,9 @@ impl Search {
             if did > 0 {
                 let ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
                 tracing::info!(chunks = did, ms, "indexed");
+                m.index_duration
+                    .record(started.elapsed().as_secs_f64(), &[]);
+                m.chunks_pending.record(0, &[]);
                 if let Ok(mut s) = self.status.write() {
                     s.last_index_ms = Some(ms);
                 }
@@ -510,7 +541,12 @@ impl Search {
             })
         };
         let texts: Vec<String> = batch.iter().map(|(_, t)| t.clone()).collect();
-        match run(texts).await {
+        let span = tracing::info_span!("embed.batch", chunks = batch.len());
+        let first = {
+            use tracing::Instrument as _;
+            run(texts).instrument(span).await
+        };
+        match first {
             Ok(Ok(v)) => {
                 self.set_problem(None);
                 return Some(batch.iter().map(|(h, _)| *h).zip(v).collect());
@@ -580,6 +616,12 @@ impl Search {
                 .flat_map(|r| r.golden.iter().map(move |q| (r.id.clone(), q.clone())))
                 .collect();
             let res = golden::run(&idx, &qs, &Filter::default(), &|q| me.query_vec(&idx, q));
+            let failed = res.iter().filter(|r| r.failed()).count() as u64;
+            if failed > 0 {
+                firelight_server::metrics::get()
+                    .golden_failures
+                    .add(failed, &[opentelemetry::KeyValue::new("set", "repos")]);
+            }
             for r in res.iter().filter(|r| r.failed()) {
                 tracing::warn!(repo = %r.repo, "golden question fails: {}", golden::describe(r));
             }
@@ -629,6 +671,12 @@ impl Search {
                 (Builtin::Fail, Vec::new())
             }
         };
+        let failed = results.iter().filter(|r| r.failed()).count() as u64;
+        if failed > 0 {
+            firelight_server::metrics::get()
+                .golden_failures
+                .add(failed, &[opentelemetry::KeyValue::new("set", "builtin")]);
+        }
         for r in results.iter().filter(|r| r.failed()) {
             tracing::error!("built-in golden question fails: {}", golden::describe(r));
         }
@@ -818,9 +866,26 @@ mod tests {
             None,
             Some(Arc::new(firelight_embed::Fake::default()) as Shared),
         ] {
+            let fake = e.is_some();
             let s = search_with(e);
-            let docs = Some(crate::hub::self_docs_files());
-            let state = s.run_builtin(docs, None, Limits::default()).await;
+            let mut files = crate::hub::self_docs_files();
+            if fake {
+                // The fake embedder has no meaning: keep the questions words
+                // answer (the model job runs the meaning ones with the model).
+                for f in &mut files {
+                    if f.path == "golden.yaml" {
+                        let text =
+                            String::from_utf8_lossy(f.contents.as_deref().unwrap_or_default())
+                                .to_string();
+                        let kept: Vec<&str> = text
+                            .split("\n  - ")
+                            .filter(|q| !q.contains("needs: meaning"))
+                            .collect();
+                        *f = InputFile::regular("golden.yaml", kept.join("\n  - ").into_bytes());
+                    }
+                }
+            }
+            let state = s.run_builtin(Some(files), None, Limits::default()).await;
             assert_eq!(state, Builtin::Pass, "{:?}", s.info().golden_failures);
             assert!(s.golden_ok.load(Ordering::SeqCst));
         }

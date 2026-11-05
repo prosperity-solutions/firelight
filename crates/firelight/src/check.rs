@@ -16,11 +16,18 @@ pub struct Args {
 /// Every diagnostic, with the folder it belongs to. Paths are shown relative
 /// to the current folder when the checked folder isn't `.`.
 pub fn run(args: Args) -> ExitCode {
+    let (all, cat) = collect(&args.dirs, args.strict);
+    report(&all, &cat, args.json)
+}
+
+/// Validate `dirs` together: every diagnostic (sorted, paths shown from the
+/// current folder) and the catalog they build.
+pub fn collect(dirs: &[PathBuf], strict: bool) -> (Vec<Diagnostic>, catalog::Catalog) {
     let limits = Limits::default();
-    let dirs = if args.dirs.is_empty() {
+    let dirs = if dirs.is_empty() {
         vec![PathBuf::from(".")]
     } else {
-        args.dirs
+        dirs.to_vec()
     };
     let mut all: Vec<Diagnostic> = Vec::new();
     let mut repos = Vec::new();
@@ -56,13 +63,13 @@ pub fn run(args: Args) -> ExitCode {
             repos.push(r);
         }
     }
-    let strict = if args.strict {
+    let strict = if strict {
         Strictness::Strict
     } else {
         Strictness::Lenient
     };
     let cat = catalog::build(repos, strict);
-    for (repo, mut d) in cat.diagnostics {
+    for (repo, mut d) in cat.diagnostics.clone() {
         d.path = format!(
             "{}{}",
             prefixes.get(&repo).cloned().unwrap_or_default(),
@@ -72,9 +79,14 @@ pub fn run(args: Args) -> ExitCode {
     }
     firelight_format::diag::sort(&mut all);
     all.dedup();
+    (all, cat)
+}
+
+/// Print the diagnostics; exit 1 on any error.
+pub fn report(all: &[Diagnostic], cat: &catalog::Catalog, json: bool) -> ExitCode {
     let errors = all.iter().filter(|d| d.severity == Severity::Error).count();
     let warnings = all.len() - errors;
-    if args.json {
+    if json {
         let v: Vec<_> = all
             .iter()
             .map(|d| {
@@ -89,7 +101,7 @@ pub fn run(args: Args) -> ExitCode {
             serde_json::json!({ "errors": errors, "warnings": warnings, "diagnostics": v })
         );
     } else {
-        for d in &all {
+        for d in all {
             println!("{d}");
         }
         let n = cat.repos.len();

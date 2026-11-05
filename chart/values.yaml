@@ -48,10 +48,11 @@ persistence:
   accessModes:
     - ReadWriteOnce
 
-# Sized for the default embedding model; M8 replaces these with measured numbers (D4)
+# Sized for the default embedding model, from measured numbers (D4): f32 on
+# CPU, peak ~3.5 GiB while the model loads (3.9 GiB seen on a laptop), then
+# less; a query takes ~0.3 s on a GitHub runner. With FIRELIGHT_EMBEDDER=off,
+# 256Mi is plenty.
 resources:
-  # D4: the default model (f32, CPU) peaks at ~3.9 GiB while it loads, then
-  # serves in less; queries take ~0.2 s each on one core.
   requests:
     cpu: "1"
     memory: 3Gi

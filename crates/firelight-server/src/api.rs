@@ -69,7 +69,9 @@ async fn answer(
     };
     let base = state.ui.public_url.trim_end_matches('/').to_string();
     let version = state.ui.version.clone();
+    let span = tracing::Span::current();
     let res = tokio::task::spawn_blocking(move || {
+        let _in = span.enter();
         let ctx = Ctx {
             content: content.as_ref(),
             base: &base,

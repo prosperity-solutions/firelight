@@ -1,0 +1,12 @@
+# values.yaml
+publicUrl: https://firelight.acme.example
+config:
+  auth: { ui: none, mcp: token }   # behind your VPN or auth proxy
+  sources:
+    - { id: infra-repo, kind: github, url: https://github.com/acme/infra-repo }
+existingSecret: firelight          # kubectl create secret generic firelight --from-file=...
+secretFiles:
+  FIRELIGHT_AUTH_MCP_TOKENS_FILE: mcp-tokens
+  FIRELIGHT_GITHUB_APP_PRIVATE_KEY_FILE: github-app.pem
+env:
+  FIRELIGHT_GITHUB_APP_ID: "123456"
