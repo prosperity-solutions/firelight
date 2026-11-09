@@ -159,9 +159,26 @@ fn hostile_repo_text_is_escaped_everywhere() {
             None,
         )
         .unwrap_or_default(),
-        pages::repo_page(&ui, &c, "evil").unwrap_or_default(),
+        pages::repo_page(&ui, &c, "evil", None).unwrap_or_default(),
         pages::search_page(&ui, &c, "default", x),
     ];
+    // The guide summary is a `title`, the link note a tooltip and part of the
+    // "?" button's label: all escaped.
+    let page = &pages_html[0];
+    assert!(
+        page.contains("title=\"&quot; onmouseover=&quot;alert(1)\""),
+        "{page}"
+    );
+    assert!(
+        page.contains("aria-label=\"&lt;script&gt;alert(1)&lt;/script&gt;: &quot; onmouseover=&quot;alert(1)\""),
+        "{page}"
+    );
+    assert!(
+        page.contains(
+            "<span class=\"tip-text\" aria-hidden=\"true\">&quot; onmouseover=&quot;alert(1)</span>"
+        ),
+        "{page}"
+    );
     for h in pages_html {
         assert!(!h.contains("<script>alert"), "{h}");
         assert!(!h.contains("<img src=x"), "{h}");
@@ -413,4 +430,41 @@ fn ids_are_unique_on_every_page() {
             assert!(seen.insert(id.to_string()), "id {id:?} twice in:\n{html}");
         }
     }
+}
+
+/// A space lists every guide, A to Z by title whatever the case; a column
+/// without entries is left out.
+#[test]
+fn entry_columns_list_everything_sorted() {
+    let mut files = vec![InputFile::regular(
+        "repo.yaml",
+        b"format: 1\nid: many\nname: Many\nsummary: Lots of guides.\nowner: Acme\n".to_vec(),
+    )];
+    let titles = [
+        "delta", "Alpha", "charlie", "Bravo", "echo", "Foxtrot", "golf", "Hotel", "india",
+        "Juliett", "kilo",
+    ];
+    for (i, t) in titles.iter().enumerate() {
+        files.push(InputFile::regular(
+            format!("guides/g{i:02}.md"),
+            format!("---\nformat: 1\ntitle: {t}\nsummary: Does {i}.\n---\nBody.\n").into_bytes(),
+        ));
+    }
+    let (repo, _) = parse_repo(&files, None, &Limits::default());
+    let repo = repo.unwrap_or_else(|| panic!("the repo should parse"));
+    let cat = Arc::new(catalog::build(vec![repo], Strictness::Lenient));
+    let h =
+        pages::space_page(&ui(), &Fixed::new(cat), "default", &BTreeMap::new()).unwrap_or_default();
+    let shown: Vec<&str> = h
+        .split("<li><a href=\"/e/many/")
+        .skip(1)
+        .filter_map(|x| x.split_once("\">")?.1.split_once("</a>").map(|(t, _)| t))
+        .collect();
+    let mut want = titles.to_vec();
+    want.sort_by_key(|t| t.to_lowercase());
+    assert_eq!(shown, want, "{h}");
+    assert!(
+        !h.contains("<h2>Concepts</h2>"),
+        "no empty Concepts column: {h}"
+    );
 }

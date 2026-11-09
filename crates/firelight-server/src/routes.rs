@@ -153,12 +153,16 @@ async fn entry(
     }
 }
 
-async fn repo(State(state): State<AppState>, Path(repo): Path<String>) -> Response {
+async fn repo(
+    State(state): State<AppState>,
+    Path(repo): Path<String>,
+    Query(q): Query<BTreeMap<String, String>>,
+) -> Response {
     let c = match content(&state) {
         Ok(c) => c,
         Err(r) => return r,
     };
-    match pages::repo_page(&state.ui, c, &repo) {
+    match pages::repo_page(&state.ui, c, &repo, q.get("s").map(String::as_str)) {
         Some(p) => Html(p).into_response(),
         None => not_found(&state, c, &format!("There is no repo {repo:?}.")),
     }

@@ -3,9 +3,15 @@ source: crates/firelight-server/tests/pages.rs
 expression: "main_of(&pages::space_index(&ui, c.as_ref()))"
 ---
 <main class="space-index">
+<h2>Spaces</h2>
 <ul class="space-cards">
 <li><a href="/s/platform"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#server"></use></svg><strong>Platform</strong><span>Environments, clusters, access, deploys.</span></a></li>
 <li><a href="/s/support"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#help"></use></svg><strong>Support</strong><span>What the support team needs every day.</span></a></li>
 <li class="all"><a href="/s/all"><strong>All</strong><span>Everything on one page</span></a></li>
+</ul>
+<h2>Repositories</h2>
+<ul class="space-cards repo-cards">
+<li><a href="/r/acme-app"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#git"></use></svg><strong>App</strong><span>The Acme web app and its API, deployed to every environment.</span></a><button type="button" class="tip" aria-label="App: The Acme web app and its API, deployed to every environment."><span aria-hidden="true">?</span><span class="tip-text" aria-hidden="true">The Acme web app and its API, deployed to every environment.</span></button></li>
+<li><a href="/r/acme-infra"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#git"></use></svg><strong>Infra</strong><span>Terraform and Helm for the clusters every Acme app runs on.</span></a><button type="button" class="tip" aria-label="Infra: Terraform and Helm for the clusters every Acme app runs on."><span aria-hidden="true">?</span><span class="tip-text" aria-hidden="true">Terraform and Helm for the clusters every Acme app runs on.</span></button></li>
 </ul>
 </main>

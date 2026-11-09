@@ -72,21 +72,31 @@ export function initPalette() {
     const li = h("li", { id: "palette-hit-" + n, role: "option", "aria-selected": "false" });
     li.append(h("span", { className: "kind", textContent: KINDS[hit.kind] || String(hit.kind || "") }));
     li.append(h("span", { className: "title", textContent: String(hit.title ?? hit.ref ?? "") }));
-    if (hit.repo) li.append(h("span", { className: "repo", textContent: String(hit.repo) }));
-    const line = hit.summary;
-    if (line) li.append(h("span", { className: "summary", textContent: String(line) }));
+    if (hit.repo) {
+      // A mouse shortcut to the repo page; the row itself opens the hit.
+      const repo = h("span", { className: "repo", textContent: String(hit.repo), title: "Open the repo page" });
+      repo.addEventListener("click", (e) => {
+        e.stopPropagation();
+        dialog.close();
+        location.href = `/r/${encodeURIComponent(String(hit.repo))}?s=${encodeURIComponent(space() || "all")}`;
+      });
+      li.append(repo);
+    }
     if (hit.kind === "link" && hit.show) {
-      // Keyboard: Shift+Enter. The chip is a mouse shortcut for the same thing,
-      // not a control, so the option holds nothing interactive.
+      // Enter opens the link; this chip (and Shift+Enter) shows where it sits on
+      // the page instead. A mouse shortcut, not a control, so the option holds
+      // nothing interactive.
       li.setAttribute("aria-keyshortcuts", "Shift+Enter");
-      li.setAttribute("aria-description", "Shift+Enter: show me where it is");
-      const btn = h("span", { className: "show-me", "aria-hidden": "true", textContent: "Show me ✨" });
+      li.setAttribute("aria-description", "Shift+Enter: show it on the page");
+      const btn = h("span", { className: "show-me", "aria-hidden": "true", textContent: "Locate", title: "Show where it is on the page (Shift+Enter)" });
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
         showMe(hit);
       });
       li.append(btn);
     }
+    const line = hit.summary;
+    if (line) li.append(h("span", { className: "summary", textContent: String(line), title: String(line) }));
     li.addEventListener("click", () => go(hit));
     li.addEventListener("mousemove", () => index !== n && select(n));
     return li;

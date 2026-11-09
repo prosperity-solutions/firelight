@@ -59,6 +59,17 @@ pub fn render(md: &str, home: &str, resolve: &dyn Resolve) -> String {
                     ))));
                 }
             }
+            // A table scrolls sideways in its own box; the page never does.
+            Event::Start(Tag::Table(a)) if heading.is_none() => {
+                events.push(Event::Html(CowStr::from(
+                    "<div class=\"table-wrap\" tabindex=\"0\" role=\"region\" aria-label=\"Table\">",
+                )));
+                events.push(Event::Start(Tag::Table(a)));
+            }
+            Event::End(TagEnd::Table) if heading.is_none() => {
+                events.push(Event::End(TagEnd::Table));
+                events.push(Event::Html(CowStr::from("</div>")));
+            }
             ev => match heading.as_mut() {
                 Some((_, inner, text)) => {
                     if let Event::Text(t) | Event::Code(t) = &ev {
@@ -281,7 +292,9 @@ mod tests {
     fn tables_and_task_lists() {
         let out = r("| a | b |\n|---|---|\n| 1 | 2 |\n\n- [x] done\n- [ ] not\n");
         assert!(
-            out.contains("<table>") && out.contains("type=\"checkbox\""),
+            out.contains("<div class=\"table-wrap\" tabindex=\"0\" role=\"region\" aria-label=\"Table\"><table>")
+                && out.contains("</table>\n</div>")
+                && out.contains("type=\"checkbox\""),
             "{out}"
         );
     }

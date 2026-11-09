@@ -101,3 +101,24 @@ export function backdropClose(dialog) {
     if (!inside) dialog.close();
   });
 }
+
+const SVG = "http://www.w3.org/2000/svg";
+// Lucide eye and eye-off: the same icons the server renders.
+const EYES = {
+  "i-eye": [["path", { d: "M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0" }], ["circle", { cx: "12", cy: "12", r: "3" }]],
+  "i-eye-off": [["path", { d: "M10.73 5.08a10.74 10.74 0 0 1 11.2 6.57 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-1.44 2.49" }], ["path", { d: "M14.08 14.16a3 3 0 0 1-4.24-4.24" }], ["path", { d: "M17.48 17.5a10.75 10.75 0 0 1-15.42-5.15 1 1 0 0 1 0-.7 10.75 10.75 0 0 1 4.45-5.14" }], ["path", { d: "m2 2 20 20" }]],
+};
+
+/** The eye and eye-off line icons, built with DOM APIs. */
+export function eyeIcons() {
+  return Object.entries(EYES).map(([cls, shapes]) => {
+    const svg = document.createElementNS(SVG, "svg");
+    for (const [k, v] of Object.entries({ class: "icon " + cls, "aria-hidden": "true", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round" })) svg.setAttribute(k, v);
+    for (const [tag, attrs] of shapes) {
+      const el = document.createElementNS(SVG, tag);
+      for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+      svg.append(el);
+    }
+    return svg;
+  });
+}
