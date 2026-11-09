@@ -603,6 +603,25 @@ jobs:
           if target/debug/firelight covers --strict --base "origin/$BASE" "$FIXTURE"; then
             echo "--strict should fail"; exit 1
           fi
+      - name: A repo whose golden question expects another repo's entry
+        run: |
+          set -eu
+          a="$RUNNER_TEMP/app-repo"
+          cp -R fixtures/acme-app "$a"
+          printf '  - query: how do I get admin rights\n    expect: [acme-infra/request-access]\n' >> "$a/.firelight/golden.yaml"
+          # Alone, the cross-repo question is skipped, not failed.
+          out=$(target/debug/firelight preview --check --embedder off "$a")
+          echo "$out"
+          echo "$out" | grep -q 'repo acme-infra not loaded'
+          echo "APP_REPO=$a" >> "$GITHUB_ENV"
+      - name: Run the action with the other repo loaded too
+        uses: ./action # zizmor: ignore[self-repository]
+        with:
+          version: v0.0.0
+          binary: target/debug/firelight
+          directory: ${{ env.APP_REPO }}
+          also: |
+            fixtures/acme-infra
 
   docs:
     # §11.2: every `ci-run` snippet of docs/self-hosting.md runs here, with the

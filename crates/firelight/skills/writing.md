@@ -39,6 +39,10 @@ All three want the same thing: the right answer, fast, and true.
 - The questions people really type, with the entries that must answer them.
   Add `needs: meaning` for questions only meaning search can answer (other
   languages, paraphrases). `firelight preview --check` runs them.
+- Expect entries in other repos (`infra-repo/x`) where the answer really
+  lives: it tests that the hub finds it. Alone they are skipped (`repo
+  infra-repo not loaded`); run them with the other repos loaded too
+  (`firelight preview --check . ../infra-repo`).
 
 ## Always
 

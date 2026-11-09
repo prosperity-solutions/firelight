@@ -121,6 +121,56 @@ fn preview_check_exit_codes() {
     }
 }
 
+/// A golden question that expects another repo's entry: skipped (and said
+/// so) when that repo isn't loaded, run when it is.
+#[test]
+fn preview_check_skips_expects_in_repos_not_loaded() {
+    let app = tmp("xrepo-app");
+    write(
+        &app,
+        ".firelight/repo.yaml",
+        "format: 1\nid: app-repo\nname: App\nsummary: App.\n",
+    );
+    write(
+        &app,
+        ".firelight/golden.yaml",
+        "format: 1\nquestions:\n  - query: deploy the app\n    expect: [infra-repo/deploy]\n",
+    );
+    let infra = tmp("xrepo-infra");
+    repo(&infra, "format: 1\nquestions: []\n");
+
+    let out = bin()
+        .args(["preview", "--check", "--embedder", "off"])
+        .arg(&app)
+        .output()
+        .unwrap_or_else(|e| panic!("{e}"));
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(0), "{text}");
+    assert!(
+        text.contains("- app-repo: \"deploy the app\": skipped (infra-repo/deploy: repo infra-repo not loaded)"),
+        "{text}"
+    );
+    assert!(
+        text.contains("1 expect(s) skipped: repo(s) not loaded here: infra-repo."),
+        "{text}"
+    );
+    assert!(text.contains("0 passed, 0 failed, 1 skipped"), "{text}");
+
+    let out = bin()
+        .args(["preview", "--check", "--embedder", "off"])
+        .arg(&app)
+        .arg(&infra)
+        .output()
+        .unwrap_or_else(|e| panic!("{e}"));
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(0), "{text}");
+    assert!(text.contains("1 passed, 0 failed, 0 skipped"), "{text}");
+    assert!(!text.contains("not loaded"), "{text}");
+    for d in [app, infra] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}
+
 #[test]
 fn skills_install_project_links_claude() {
     let d = tmp("skills");

@@ -303,16 +303,22 @@ pub fn check(dirs: Vec<PathBuf>, embedder: Option<&str>) -> anyhow::Result<std::
         anyhow::bail!("embedding a golden question failed: {e}");
     }
     let failed = results.iter().filter(|r| r.failed()).count();
-    let skipped = results
-        .iter()
-        .filter(|r| r.outcome == Outcome::Skipped)
-        .count();
+    let skipped = results.iter().filter(|r| r.skipped()).count();
     for r in &results {
-        match r.outcome {
-            Outcome::Pass => println!("✓ {}: {}", r.repo, golden::describe(r)),
-            Outcome::Skipped => println!("- {}: {}", r.repo, golden::describe(r)),
-            Outcome::Fail { .. } => println!("✗ {}: {}", r.repo, golden::describe(r)),
-        }
+        let mark = match r.outcome {
+            Outcome::Pass => "✓",
+            Outcome::Skipped(_) => "-",
+            Outcome::Fail { .. } => "✗",
+        };
+        println!("{mark} {}: {}", r.repo, golden::describe(r));
+    }
+    let not_loaded = golden::not_loaded_repos(&results);
+    if !not_loaded.is_empty() {
+        let n: usize = results.iter().map(|r| r.not_loaded.len()).sum();
+        println!(
+            "- {n} expect(s) skipped: repo(s) not loaded here: {}. Load them alongside (firelight preview --check DIR OTHER-DIR…) to run them; a repo id you don't recognise is a typo.",
+            not_loaded.join(", ")
+        );
     }
     println!(
         "{} {} repo(s): {errors} error(s), {} warning(s); {chunks} chunks ({embedded} embedded, embedder {}); golden questions: {} passed, {failed} failed, {skipped} skipped.",

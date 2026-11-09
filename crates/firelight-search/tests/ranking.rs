@@ -9,7 +9,7 @@ use std::sync::Arc;
 use firelight_embed::{Embedder, Fake};
 use firelight_format::catalog::{self, Catalog, Strictness};
 use firelight_format::{Limits, Ref, parse_repo};
-use firelight_search::golden::{self, Outcome};
+use firelight_search::golden::{self, Outcome, Skip};
 use firelight_search::index::RRF_K;
 use firelight_search::{Filter, Index, Kind};
 
@@ -243,7 +243,12 @@ fn golden_questions() {
             .find(|(_, q)| q.query == x.query)
             .map(|(_, q)| q.needs_meaning);
         if q == Some(true) {
-            assert_eq!(x.outcome, Outcome::Skipped, "{}", golden::describe(x));
+            assert_eq!(
+                x.outcome,
+                Outcome::Skipped(Skip::NeedsMeaning),
+                "{}",
+                golden::describe(x)
+            );
         } else {
             assert_eq!(x.outcome, Outcome::Pass, "{}", golden::describe(x));
         }
@@ -365,5 +370,98 @@ fn filters_apply_before_the_cut() {
         hits.first().map(|h| h.r.clone()),
         Some(r("big", "target")),
         "{hits:#?}"
+    );
+}
+
+/// Expects in repos that aren't loaded are skipped, never failed (one repo's
+/// own CI loads only that repo). Mixed questions are judged on the rest.
+#[test]
+fn golden_expects_in_unloaded_repos_are_skipped() {
+    let app = Arc::new(catalog::build(
+        vec![repo("fixtures/acme-app")],
+        Strictness::Lenient,
+    ));
+    let idx = Index::words_only(app).unwrap_or_else(|e| panic!("{e}"));
+    let q = |query: &str, expect: &[&str]| {
+        (
+            "acme-app".to_string(),
+            firelight_format::GoldenQuestion {
+                query: query.into(),
+                expect: expect
+                    .iter()
+                    .map(|e| {
+                        (
+                            Ref::parse(e, "acme-app").unwrap_or_else(|x| panic!("{x}")),
+                            firelight_format::Loc::default(),
+                        )
+                    })
+                    .collect(),
+                within: 3,
+                needs_meaning: false,
+                loc: firelight_format::Loc::default(),
+            },
+        )
+    };
+    let qs = vec![
+        // All local: judged as before.
+        q("how do I deploy", &["deploy-an-app"]),
+        // All in a repo that isn't loaded: skipped as a whole.
+        q("how do I get admin rights", &["acme-infra/request-access"]),
+        // Mixed: judged on the local expect, the other one noted.
+        q("how do I deploy", &["deploy-an-app", "acme-infra/argocd"]),
+        // Mixed and the local one fails: still a failure.
+        q("zebra", &["deploy-an-app", "acme-infra/argocd"]),
+        // A mistyped repo id is "not loaded" too, and stays visible.
+        q("what is argo", &["acme-infar/argocd"]),
+    ];
+    let embedded = std::cell::RefCell::new(Vec::new());
+    let res = golden::run(&idx, &qs, &Filter::default(), &|q| {
+        embedded.borrow_mut().push(q.to_string());
+        None
+    });
+    assert!(
+        !embedded
+            .borrow()
+            .iter()
+            .any(|q| q.contains("admin rights") || q.contains("argo")),
+        "a question that can't run is not embedded: {:?}",
+        embedded.borrow()
+    );
+    assert_eq!(
+        res[0].outcome,
+        Outcome::Pass,
+        "{}",
+        golden::describe(&res[0])
+    );
+    assert!(res[0].not_loaded.is_empty());
+
+    assert_eq!(res[1].outcome, Outcome::Skipped(Skip::NotLoaded));
+    assert!(!res[1].failed());
+    assert_eq!(
+        golden::describe(&res[1]),
+        "\"how do I get admin rights\": skipped (acme-infra/request-access: repo acme-infra not loaded)"
+    );
+
+    assert_eq!(
+        res[2].outcome,
+        Outcome::Pass,
+        "{}",
+        golden::describe(&res[2])
+    );
+    assert_eq!(res[2].expect.len(), 1);
+    assert!(
+        golden::describe(&res[2])
+            .ends_with("passes (skipped acme-infra/argocd: repo acme-infra not loaded)"),
+        "{}",
+        golden::describe(&res[2])
+    );
+
+    assert!(res[3].failed(), "{}", golden::describe(&res[3]));
+
+    assert!(res[4].skipped());
+    assert!(golden::describe(&res[4]).contains("repo acme-infar not loaded"));
+    assert_eq!(
+        golden::not_loaded_repos(&res),
+        vec!["acme-infar".to_string(), "acme-infra".to_string()]
     );
 }

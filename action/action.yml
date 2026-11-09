@@ -10,6 +10,11 @@
 # GitHub attestation, then runs `firelight check`, `firelight preview --check`
 # and, on pull requests, `firelight covers`. Each step's output goes into the
 # job summary.
+#
+# Golden questions that expect entries in other repos are skipped unless those
+# repos are loaded too: check them out next to this one (actions/checkout with
+# `repository` and `path`, plus a token for private ones) and list their
+# folders in `also`. See `firelight skills ci`.
 name: Firelight
 description: Check a repo's .firelight/ docs, run its golden questions, and flag maybe-stale entries.
 author: prosperity-solutions
@@ -24,6 +29,9 @@ inputs:
   directory:
     description: The repo folder holding .firelight/.
     default: "."
+  also:
+    description: "More folders holding other repos' .firelight/, one per line, loaded next to `directory` by `firelight preview --check` so cross-repo golden questions run. Their errors fail the check too."
+    default: ""
   embedder:
     description: "`off` (default, fast) or `candle` to run golden questions with meaning search (the model is cached)."
     default: "off"
@@ -69,12 +77,18 @@ runs:
       shell: bash
       env:
         DIR: ${{ inputs.directory }}
+        ALSO: ${{ inputs.also }}
         EMBEDDER: ${{ inputs.embedder }}
       run: |
         set -o pipefail
+        dirs=("$DIR")
+        while IFS= read -r d; do
+          d="${d#"${d%%[![:space:]]*}"}"; d="${d%"${d##*[![:space:]]}"}"
+          if [ -n "$d" ]; then dirs+=("$d"); fi
+        done <<< "$ALSO"
         { echo '### firelight preview --check'; echo '~~~~~~~~~~'; } >> "$GITHUB_STEP_SUMMARY"
         status=0
-        "$RUNNER_TEMP/firelight-bin/firelight" preview --check --embedder "$EMBEDDER" "$DIR" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || status=$?
+        "$RUNNER_TEMP/firelight-bin/firelight" preview --check --embedder "$EMBEDDER" -- "${dirs[@]}" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || status=$?
         echo '~~~~~~~~~~' >> "$GITHUB_STEP_SUMMARY"
         exit "$status"
 

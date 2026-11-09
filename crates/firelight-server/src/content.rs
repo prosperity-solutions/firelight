@@ -40,6 +40,9 @@ pub struct SearchInfo {
     /// One line per golden question that didn't pass (built-in first), with
     /// its repo; built-in failures keep `/readyz` unready.
     pub golden_failures: Vec<(String, String)>,
+    /// One line per golden question with expects in repos that aren't
+    /// loaded (skipped, not failed), with its repo.
+    pub golden_not_loaded: Vec<(String, String)>,
 }
 
 pub trait Content: Send + Sync {
