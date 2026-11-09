@@ -12,7 +12,7 @@ publish.workspace = true
 firelight-format = { path = "../firelight-format" }
 firelight-store = { path = "../firelight-store" }
 base64 = "0.22"
-hmac = "0.12"
+hmac = "0.13"
 reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "json", "http2"] }
 ring = "0.17"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
