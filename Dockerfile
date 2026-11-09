@@ -5,7 +5,7 @@
 # Base (D5): Chainguard's git image (glibc, git 2.56, CA certificates, user
 # 65532), pinned by digest. Git sources need the git CLI (D1: gix has no
 # blobless clone or sparse checkout yet). Dependabot proposes updates.
-FROM cgr.dev/chainguard/git:latest-glibc@sha256:36be08a667a52134544e40903c71f5422084193a9777aa3b7fc73f2b7f1d0207
+FROM cgr.dev/chainguard/git:latest-glibc@sha256:f3b9ade5b3e78c5ea04cd77baa431ec3a5c060da5144a8357cc0ba47326dcd93
 
 ARG TARGETARCH
 COPY --chmod=0755 dist/firelight-linux-${TARGETARCH} /usr/local/bin/firelight
