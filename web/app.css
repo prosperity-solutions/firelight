@@ -13,6 +13,7 @@
   --note: #675e55;          /* >= 5.5:1 on --bg */
   --line: #ddd5ca;
   --danger: #b3261e;
+  --ok: #2e7d4f;
   --warn: #b7791f;
   --link: color-mix(in srgb, var(--accent) 62%, var(--ink));
   --shadow: 0 1px 2px rgb(0 0 0 / .08), 0 4px 14px rgb(0 0 0 / .06);
@@ -37,6 +38,7 @@
     --note: #b0a69b;        /* >= 6:1 on --bg */
     --line: #3b3632;
     --danger: #ef7b72;
+    --ok: #6cc28f;
     --warn: #e0a84a;
     --link: color-mix(in srgb, var(--accent) 55%, var(--ink));
     --shadow: 0 1px 2px rgb(0 0 0 / .4);
@@ -51,6 +53,7 @@
   --note: #b0a69b;
   --line: #3b3632;
   --danger: #ef7b72;
+  --ok: #6cc28f;
   --warn: #e0a84a;
   --link: color-mix(in srgb, var(--accent) 55%, var(--ink));
   --shadow: 0 1px 2px rgb(0 0 0 / .4);
@@ -445,3 +448,34 @@ pre.copy { position: relative; }
 .space-cards > li > .tip { position: absolute; top: .8rem; right: .8rem; }
 .results .repo:hover { color: var(--link); text-decoration: underline; }
 .hits a.repo { color: var(--note); }
+
+/* /status: the shared column and type scale; tables scroll inside their box. */
+.status h1 { font-size: var(--fs-xl); margin: .3rem 0 .3rem; }
+.status h2 { font-size: var(--fs-lg); margin: 2.5rem 0 .6rem; }
+.status h3 { font-size: var(--fs-md); margin: 1.6rem 0 .4rem; }
+.status-meta { color: var(--note); font-size: var(--fs-sm); margin: .6rem 0 0; }
+.status table { border-collapse: collapse; width: 100%; font-size: var(--fs-sm); }
+.status th, .status td {
+  text-align: left; vertical-align: top; padding: .55rem 1rem .55rem 0;
+  border-bottom: 1px solid var(--line); overflow-wrap: normal; word-break: normal;
+}
+.status thead th {
+  color: var(--note); font-size: var(--fs-xs); letter-spacing: .06em;
+  text-transform: uppercase; white-space: nowrap;
+}
+.status td { min-width: 7rem; }
+.status td.src { min-width: 16rem; }
+.status .kv th { width: 13rem; min-width: 10rem; font-weight: var(--fw); color: var(--note); }
+.status .config td:first-child { white-space: nowrap; }
+.status .config td { overflow-wrap: anywhere; }
+.status .from { display: flex; align-items: center; gap: .4rem; color: var(--note); font-size: var(--fs-xs); white-space: nowrap; }
+.status .from code { font-size: inherit; }
+.status time, .status .sha { white-space: nowrap; }
+.status td > .tip { margin-left: .4rem; vertical-align: middle; }
+.copy-btn.inline { position: static; font-size: var(--fs-xs); padding: 0 .45rem; }
+.health { display: inline-flex; align-items: center; gap: .4rem; white-space: nowrap; }
+.health .dot { width: .55rem; height: .55rem; border-radius: 50%; background: var(--note); }
+.health.ok .dot { background: var(--ok); }
+.health.warn .dot { background: var(--warn); }
+.status-list li { padding: .4rem 0; border-bottom: 1px solid var(--line); font-size: var(--fs-sm); }
+.status-list code { margin-right: .4rem; }

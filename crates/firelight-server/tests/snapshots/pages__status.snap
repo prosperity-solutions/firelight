@@ -1,0 +1,52 @@
+---
+source: crates/firelight-server/tests/pages.rs
+expression: main
+---
+<main class="status">
+<h1>Status</h1>
+<p class="status-meta">Firelight v0.0.0-test · started <time datetime="2026-01-02T03:04:05Z" data-rel title="2026-01-02T03:04:05Z">2026-01-02 03:04 UTC</time> · format versions 1</p>
+<h2>Sources</h2>
+<div class="table-wrap"><table class="sources">
+<thead><tr><th>Repo</th><th>Health</th><th>Serving</th><th>Last pull</th></tr></thead>
+<tbody>
+<tr><td class="src"><a href="/r/acme-infra">acme-infra</a><span class="from"><code title="git https://git.acme.example/platform/a-very-long-group-name/infra-repo.git @ main">git https://git.…roup-name/infra-repo.git @ main</code><button type="button" class="copy-btn inline" data-copy="git https://git.acme.example/platform/a-very-long-group-name/infra-repo.git @ main" hidden>Copy</button></span></td><td><span class="health warn"><span class="dot" aria-hidden="true"></span>checks failing</span><button type="button" class="tip" aria-label="Health: newest commit fails its checks; serving the last good one"><span aria-hidden="true">?</span><span class="tip-text" aria-hidden="true">newest commit fails its checks; serving the last good one</span></button></td><td><code class="sha">0123456</code><button type="button" class="tip" aria-label="Not the newest: The newest commit fedcba9 isn&#39;t served: it fails its checks or couldn&#39;t be read. The last good commit stays."><span aria-hidden="true">?</span><span class="tip-text" aria-hidden="true">The newest commit fedcba9 isn&#39;t served: it fails its checks or couldn&#39;t be read. The last good commit stays.</span></button></td><td><time datetime="2026-01-02T03:05:00Z" data-rel title="2026-01-02T03:05:00Z (42 ms)">2026-01-02 03:05 UTC</time></td></tr>
+<tr><td class="src"><a href="/r/acme-app">acme-app</a><span class="from"><code title="dir /srv/&lt;script&gt;alert(1)&lt;/script&gt;/app-repo">dir /srv/&lt;script&gt;alert(1)&lt;/script&gt;/app-repo</code><button type="button" class="copy-btn inline" data-copy="dir /srv/&lt;script&gt;alert(1)&lt;/script&gt;/app-repo" hidden>Copy</button></span></td><td><span class="health ok"><span class="dot" aria-hidden="true"></span>ok</span></td><td><code class="sha">dir-abc</code></td><td><time datetime="2026-01-02T03:05:00Z" data-rel title="2026-01-02T03:05:00Z (3 ms)">2026-01-02 03:05 UTC</time></td></tr>
+</tbody></table></div>
+<h3><code>acme-app</code></h3>
+<ul class="status-list">
+<li>links.yaml:3:1: warning: a &quot;quoted&quot; &lt;b&gt;note&lt;/b&gt;</li>
+</ul>
+<h3>Catalog warnings</h3>
+<ul class="status-list">
+<li><code>acme-app</code> .firelight/links.yaml:45:9: warning: link &quot;old-dashboard&quot;: island acme-infra/dashboards does not exist, so it goes into the Unsorted card</li>
+</ul>
+<p class="status-meta">Maybe stale entries: 2</p>
+<h2>Search</h2>
+<div class="table-wrap"><table class="kv"><tbody>
+<tr><th>Embedder</th><td>fake</td></tr>
+<tr><th>Model</th><td>fake-8</td></tr>
+<tr><th>Dimensions</th><td>8</td></tr>
+<tr><th>Chunks embedded</th><td>10 of 10</td></tr>
+<tr><th>Last index</th><td>5 ms</td></tr>
+<tr><th>Built-in golden check</th><td>passed</td></tr>
+</tbody></table></div>
+<h3>Golden questions that don&#39;t pass</h3>
+<ul class="status-list">
+<li><code>acme-app</code> where are &lt;the&gt; logs?</li>
+</ul>
+<h3>Golden expects in repos that aren&#39;t loaded (skipped)</h3>
+<ul class="status-list">
+<li><code>acme-app</code> how do I reach other-repo?</li>
+</ul>
+<h2>Database</h2>
+<div class="table-wrap"><table class="kv"><tbody>
+<tr><th>Size</th><td>4096 bytes</td></tr>
+<tr><th>Schema version</th><td>2</td></tr>
+</tbody></table></div>
+<h2>Configuration</h2>
+<div class="table-wrap"><table class="config">
+<thead><tr><th>Key</th><th>Value</th><th>From</th></tr></thead>
+<tbody>
+<tr><td><code>server.public_url</code></td><td><code>https://firelight.acme.example</code></td><td>default</td></tr>
+</tbody></table></div>
+</main>

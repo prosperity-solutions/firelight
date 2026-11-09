@@ -347,6 +347,27 @@ With a single space (and no `ui.default_space`), `/` redirects to it instead.
 
 In the ⌘K palette the repo name is a mouse shortcut to the repo page.
 
+## Status page (`/status`)
+
+`<main class="status">`: an `<h1>`, a `<p class="status-meta">`, then `<h2>`
+sections. Every table sits in `<div class="table-wrap">` and scrolls inside
+it. Sources is `<table class="sources">`, one row per source:
+
+```html
+<tr><td class="src"><a href="/r/acme-infra">acme-infra</a>
+  <span class="from"><code title="git https://… @ main">git https://…o.git @ main</code>
+  <button type="button" class="copy-btn inline" data-copy="git https://… @ main" hidden>Copy</button></span></td>
+<td><span class="health ok|warn|idle"><span class="dot"></span>ok</span> TIP?</td>
+<td><code class="sha">0123456</code> TIP?</td>
+<td><time datetime="2026-01-02T03:05:00Z" data-rel title="… (42 ms)">2026-01-02 03:05 UTC</time></td></tr>
+```
+
+The "from" text is cut in the middle; the `title` and the copy button carry
+all of it. JS un-hides `button.copy-btn[data-copy]` and turns every
+`time[data-rel]` into a relative time ("5 minutes ago"). Key/value sections
+are `<table class="kv">`; lists of problems and golden questions are
+`<ul class="status-list">`.
+
 ## Live reload (`firelight preview` only)
 
 When `<meta name="firelight-live" content="7">` is present (7 = the content

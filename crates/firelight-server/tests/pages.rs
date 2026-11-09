@@ -468,3 +468,46 @@ fn entry_columns_list_everything_sorted() {
         "no empty Concepts column: {h}"
     );
 }
+
+/// `/status` as a page: health badges, short commit, the source's full
+/// "from" in the title and the copy button, times the JS makes relative,
+/// skipped golden expects, and everything escaped.
+#[test]
+fn status_page() {
+    let c = acme();
+    let st = serde_json::json!({
+        "started_at": "2026-01-02T03:04:05Z",
+        "format_versions": [1],
+        "sources": [
+            {
+                "id": "acme-infra", "kind": "git",
+                "url": "https://git.acme.example/platform/a-very-long-group-name/infra-repo.git",
+                "ref": "main", "commit": "0123456789abcdef", "newest_commit": "fedcba9876543210",
+                "last_pull_at": "2026-01-02T03:05:00Z", "last_pull_ms": 42,
+                "last_pull_error": null, "errors": [], "warnings": [],
+                "health": "newest commit fails its checks; serving the last good one"
+            },
+            {
+                "id": "acme-app", "kind": "dir", "url": "/srv/<script>alert(1)</script>/app-repo",
+                "commit": "dir-abc", "newest_commit": "dir-abc",
+                "last_pull_at": "2026-01-02T03:05:00Z", "last_pull_ms": 3,
+                "errors": [], "warnings": [{"path": "links.yaml", "line": 3, "col": 1, "severity": "warning", "message": "a \"quoted\" <b>note</b>"}],
+                "health": "ok"
+            }
+        ],
+        "maybe_stale": 2,
+        "embedder": {"backend": "fake", "model": "fake-8", "dims": 8, "chunks": 10, "chunks_embedded": 10, "last_index_ms": 5},
+        "golden": {
+            "builtin": "passed",
+            "failures": [{"repo": "acme-app", "question": "where are <the> logs?"}],
+            "not_loaded": [{"repo": "acme-app", "question": "how do I reach other-repo?"}]
+        },
+        "database": {"size_bytes": 4096, "schema_version": 2},
+        "config": [{"key": "server.public_url", "value": "https://firelight.acme.example", "from": "default"}]
+    });
+    let html = pages::status_page(&ui(), c.as_ref(), &st);
+    let main = main_of(&html);
+    assert!(!main.contains("<script>"), "unescaped source url");
+    assert!(!main.contains("<b>"), "unescaped diagnostic");
+    insta::assert_snapshot!("status", main);
+}
