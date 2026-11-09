@@ -41,15 +41,13 @@ external requests. Set styles with classes; use `el.hidden`,
       <a class="title" href="/">Firelight·acme</a>
       <span class="sep">›</span>
       <details class="space-switch">                      <!-- works without JS; Escape closes it -->
-        <summary>Platform</summary>                         <!-- on /r/<repo>: the repo's name -->
-        <ul class="space-list">                             <!-- scrolls when long -->
-          <li class="group" aria-hidden="true">Spaces</li>
-          <li><a href="/s/platform" aria-current="page">Platform<small>Environments, clusters…</small></a></li>
-          <li><a href="/s/support">Support<small>…</small></a></li>
-          <li class="all"><a href="/s/all">All<small>Everything on one page</small></a></li>
+        <summary>Platform</summary>                         <!-- on /r/<repo>: the repo's name; on /: "Home" -->
+        <ul class="space-list">                             <!-- names only (and the space's icon); scrolls when long -->
+          <li><a href="/s/platform" aria-current="page">ICON Platform</a></li>   <!-- current, hover and focus: accent bar + soft background -->
+          <li><a href="/s/support">ICON Support</a></li>
+          <li class="all"><a href="/s/all">All</a></li>
           <li class="sep" role="separator"></li>
-          <li class="group" aria-hidden="true">Repositories</li>
-          <li><a href="/r/acme-infra">Infra<small>Terraform and Helm…</small></a></li>   <!-- A to Z -->
+          <li><a href="/r/acme-infra">Infra</a></li>   <!-- repos, A to Z -->
         </ul>
       </details>
     </nav>
@@ -336,7 +334,10 @@ A space page with nothing on it shows nothing (no empty-state text).
 ## Space list (`/`)
 
 `<main class="space-index"><h2>Spaces</h2><ul class="space-cards"><li><a href="/s/platform"><svg class="icon">…</svg><strong>Platform</strong><span>summary</span></a></li>…</ul>
-<h2>Repositories</h2><ul class="space-cards repo-cards"><li><a href="/r/acme-infra"><strong>Infra</strong><span>summary</span></a></li>…</ul></main>`
+<h2>Repositories</h2><ul class="space-cards repo-cards"><li><a href="/r/acme-infra">GIT ICON<strong>Infra</strong><span>summary</span></a>TIP</li>…</ul></main>`
+
+Both lists share one grid; a card's summary stops at three lines, and the
+repo card's "?" holds the whole summary.
 
 With a single space (and no `ui.default_space`), `/` redirects to it instead.
 

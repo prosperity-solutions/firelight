@@ -11,7 +11,7 @@ expression: "main_of(&pages::space_index(&ui, c.as_ref()))"
 </ul>
 <h2>Repositories</h2>
 <ul class="space-cards repo-cards">
-<li><a href="/r/acme-app"><strong>App</strong><span>The Acme web app and its API, deployed to every environment.</span></a></li>
-<li><a href="/r/acme-infra"><strong>Infra</strong><span>Terraform and Helm for the clusters every Acme app runs on.</span></a></li>
+<li><a href="/r/acme-app"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#git"></use></svg><strong>App</strong><span>The Acme web app and its API, deployed to every environment.</span></a><button type="button" class="tip" aria-label="App: The Acme web app and its API, deployed to every environment."><span aria-hidden="true">?</span><span class="tip-text" aria-hidden="true">The Acme web app and its API, deployed to every environment.</span></button></li>
+<li><a href="/r/acme-infra"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#git"></use></svg><strong>Infra</strong><span>Terraform and Helm for the clusters every Acme app runs on.</span></a><button type="button" class="tip" aria-label="Infra: Terraform and Helm for the clusters every Acme app runs on."><span aria-hidden="true">?</span><span class="tip-text" aria-hidden="true">Terraform and Helm for the clusters every Acme app runs on.</span></button></li>
 </ul>
 </main>

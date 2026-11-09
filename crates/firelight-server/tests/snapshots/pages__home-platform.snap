@@ -22,14 +22,12 @@ expression: "pages::space_page(&ui, c.as_ref(), \"platform\",\n&BTreeMap::new())
 <details class="space-switch">
 <summary>Platform</summary>
 <ul class="space-list">
-<li class="group" aria-hidden="true">Spaces</li>
-<li><a href="/s/platform" aria-current="page">Platform<small>Environments, clusters, access, deploys.</small></a></li>
-<li><a href="/s/support">Support<small>What the support team needs every day.</small></a></li>
-<li class="all"><a href="/s/all">All<small>Everything on one page</small></a></li>
+<li><a href="/s/platform" aria-current="page"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#server"></use></svg>Platform</a></li>
+<li><a href="/s/support"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#help"></use></svg>Support</a></li>
+<li class="all"><a href="/s/all">All</a></li>
 <li class="sep" role="separator"></li>
-<li class="group" aria-hidden="true">Repositories</li>
-<li><a href="/r/acme-app">App<small>The Acme web app and its API, deployed to every environment.</small></a></li>
-<li><a href="/r/acme-infra">Infra<small>Terraform and Helm for the clusters every Acme app runs on.</small></a></li>
+<li><a href="/r/acme-app">App</a></li>
+<li><a href="/r/acme-infra">Infra</a></li>
 </ul>
 </details>
 </nav>

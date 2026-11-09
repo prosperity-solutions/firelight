@@ -104,17 +104,21 @@ a:not(.link):focus-visible { border-radius: 3px; }
   background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
   box-shadow: var(--shadow); padding: .3rem; margin-top: .25rem;
 }
+/* Names only, compact; the current row and the hovered or focused one look
+   like the selected search result: an accent bar and a soft background. */
 .space-list a {
-  display: block; padding: .4rem .6rem; border-radius: 6px; text-decoration: none;
+  display: flex; align-items: center; gap: .5rem; padding: .3rem .6rem .3rem calc(.6rem - 3px);
+  border-left: 3px solid transparent; border-radius: 0 6px 6px 0; text-decoration: none;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.space-list a:hover, .space-list a:focus-visible { background: var(--surface-2); }
-.space-list a[aria-current="page"] { font-weight: var(--fw-strong); }
-.space-list small { display: block; color: var(--note); font-size: var(--fs-sm); font-weight: var(--fw); }
-.space-list { max-height: 75vh; overflow: auto; }
-.space-list .group {
-  padding: .5rem .6rem .2rem; color: var(--note); font-size: var(--fs-xs);
-  text-transform: uppercase; letter-spacing: .08em;
+.space-list a .icon { color: var(--note); }
+.space-list a:hover, .space-list a:focus-visible, .space-list a[aria-current="page"] {
+  background: var(--surface-2); border-left-color: var(--accent); color: var(--ink);
 }
+.space-list a:focus-visible { outline: none; }
+.space-list { max-height: 75vh; overflow: auto; max-width: min(22rem, calc(100vw - 1.5rem)); }
+/* A closed menu takes no room (Chrome still lays out closed <details>). */
+.space-switch:not([open]) .space-list, .more:not([open]) .more-list { display: none; }
 .space-list .sep { border-top: 1px solid var(--line); margin: .3rem 0; }
 
 .search { position: relative; flex: 1 1 14rem; max-width: 30rem; margin-left: auto; }
@@ -339,7 +343,7 @@ pre.copy { position: relative; }
   text-decoration: none; box-shadow: var(--shadow);
 }
 .space-cards a:hover { border-color: var(--accent); }
-.space-cards span { color: var(--note); font-size: var(--fs-sm); }
+.space-cards a > span { color: var(--note); font-size: var(--fs-sm); }
 .hits li { margin: 0 0 1rem; }
 .hits p { margin: .15rem 0 0; color: var(--note); }
 .hits .repo { color: var(--note); font-size: var(--fs-sm); }
@@ -432,7 +436,12 @@ pre.copy { position: relative; }
 .repo-head:hover span { color: currentColor; }
 .space-index > h2 { font-size: var(--fs-lg); margin: .5rem 0 .9rem; }
 .space-index > h2 ~ h2 { margin-top: 2.5rem; }
-.repo-cards { grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: .75rem; }
-.repo-cards a { padding: .7rem .9rem; }
+/* Repo cards share the space cards' grid; the summary stops at three lines
+   and the "?" in the corner has all of it. */
+.space-cards > li { position: relative; }
+.space-cards a > span {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden;
+}
+.space-cards > li > .tip { position: absolute; top: .8rem; right: .8rem; }
 .results .repo:hover { color: var(--link); text-decoration: underline; }
 .hits a.repo { color: var(--note); }

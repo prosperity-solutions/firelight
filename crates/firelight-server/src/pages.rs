@@ -149,10 +149,11 @@ fn shell(
         (None, Some(s)) => cat.space(s).map(|x| x.title.clone()),
         (None, None) => None,
     };
+    // `/` (no space, no repo) is "Home"; an entry page without `?s=` too.
     h.raw("<span class=\"sep\">›</span>\n<details class=\"space-switch\">\n");
     h.fmt(format_args!(
-        "<summary>{}</summary>\n<ul class=\"space-list\">\n<li class=\"group\" aria-hidden=\"true\">Spaces</li>\n",
-        esc(current_title.as_deref().unwrap_or("Spaces"))
+        "<summary>{}</summary>\n<ul class=\"space-list\">\n",
+        esc(current_title.as_deref().unwrap_or("Home"))
     ));
     for s in &spaces {
         let cur = if space == Some(s.id.as_str()) {
@@ -161,14 +162,11 @@ fn shell(
             ""
         };
         h.fmt(format_args!(
-            "<li><a href=\"/s/{}\"{cur}>{}",
+            "<li><a href=\"/s/{}\"{cur}>{}{}</a></li>\n",
             attr(&s.id),
+            s.icon.as_deref().map(icon).unwrap_or_default(),
             esc(&s.title)
         ));
-        if let Some(sum) = &s.summary {
-            h.fmt(format_args!("<small>{}</small>", esc(sum)));
-        }
-        h.raw("</a></li>\n");
     }
     let cur = if space == Some(SPACE_ALL) {
         " aria-current=\"page\""
@@ -176,11 +174,11 @@ fn shell(
         ""
     };
     h.fmt(format_args!(
-        "<li class=\"all\"><a href=\"/s/all\"{cur}>All<small>Everything on one page</small></a></li>\n"
+        "<li class=\"all\"><a href=\"/s/all\"{cur}>All</a></li>\n"
     ));
     let repos = repos_sorted(cat);
     if !repos.is_empty() {
-        h.raw("<li class=\"sep\" role=\"separator\"></li>\n<li class=\"group\" aria-hidden=\"true\">Repositories</li>\n");
+        h.raw("<li class=\"sep\" role=\"separator\"></li>\n");
         for r in repos {
             let cur = if repo == Some(r.id.as_str()) {
                 " aria-current=\"page\""
@@ -188,10 +186,9 @@ fn shell(
                 ""
             };
             h.fmt(format_args!(
-                "<li><a href=\"/r/{}\"{cur}>{}<small>{}</small></a></li>\n",
+                "<li><a href=\"/r/{}\"{cur}>{}</a></li>\n",
                 attr(&r.id),
-                esc(&r.name),
-                esc(&r.summary)
+                esc(&r.name)
             ));
         }
     }
@@ -754,11 +751,14 @@ pub fn space_index(ui: &Ui, content: &dyn Content) -> String {
     if !repos.is_empty() {
         m.raw("<h2>Repositories</h2>\n<ul class=\"space-cards repo-cards\">\n");
         for r in repos {
+            // The summary is cut to three lines; the "?" has all of it.
             m.fmt(format_args!(
-                "<li><a href=\"/r/{}\"><strong>{}</strong><span>{}</span></a></li>\n",
+                "<li><a href=\"/r/{}\">{}<strong>{}</strong><span>{}</span></a>{}</li>\n",
                 attr(&r.id),
+                icon("git"),
                 esc(&r.name),
-                esc(&r.summary)
+                esc(&r.summary),
+                tip(&r.name, &r.summary)
             ));
         }
         m.raw("</ul>\n");
