@@ -1161,3 +1161,286 @@ pub fn message_page(ui: &Ui, content: &dyn Content, title: &str, text: &str) -> 
     );
     layout(ui, &cat, content, None, title, &main)
 }
+
+/// A JSON value as display text: strings as they are, null as nothing.
+fn jtext(v: &serde_json::Value) -> String {
+    match v {
+        serde_json::Value::String(x) => x.clone(),
+        serde_json::Value::Null => String::new(),
+        other => other.to_string(),
+    }
+}
+
+/// Long text cut in the middle, so both the start and the end stay readable.
+fn middle_ellipsis(s: &str, max: usize) -> String {
+    let n = s.chars().count();
+    if n <= max {
+        return s.to_string();
+    }
+    let head = max / 3;
+    let tail = max - head - 1;
+    let a: String = s.chars().take(head).collect();
+    let b: String = s.chars().skip(n - tail).collect();
+    format!("{a}…{b}")
+}
+
+/// An RFC 3339 time as `2026-01-02 03:04 UTC` (no JS); JS turns it relative.
+fn short_time(t: &str) -> String {
+    match (t.get(..10), t.get(11..16)) {
+        (Some(d), Some(hm)) if t.ends_with('Z') => format!("{d} {hm} UTC"),
+        _ => t.to_string(),
+    }
+}
+
+/// The health text as a dot and a short word; the full text is the "?".
+fn health_badge(h: &str) -> String {
+    let (class, word) = match h {
+        "ok" => ("ok", "ok"),
+        "" => ("idle", "unknown"),
+        "not served yet" => ("idle", "not served"),
+        x if x.starts_with("pull failing") => ("warn", "pull failing"),
+        x if x.starts_with("newest commit fails") => ("warn", "checks failing"),
+        _ => ("warn", "degraded"),
+    };
+    let tip = if word == h {
+        String::new()
+    } else {
+        tip("Health", h)
+    };
+    format!(
+        "<span class=\"health {class}\"><span class=\"dot\" aria-hidden=\"true\"></span>{}</span>{tip}",
+        esc(word)
+    )
+}
+
+/// `/status` (§16.1): the status JSON (already redacted) as a page.
+pub fn status_page(ui: &Ui, content: &dyn Content, st: &serde_json::Value) -> String {
+    let cat = content.catalog();
+    let s = jtext;
+    let mut m = H::new();
+    m.raw("<main class=\"status\">\n<h1>Status</h1>\n<p class=\"status-meta\">");
+    m.fmt(format_args!("Firelight v{}", esc(&ui.version)));
+    if let Some(t) = st["started_at"].as_str() {
+        m.fmt(format_args!(
+            " · started <time datetime=\"{}\" data-rel title=\"{}\">{}</time>",
+            attr(t),
+            attr(t),
+            esc(&short_time(t))
+        ));
+    }
+    if let Some(v) = st["format_versions"].as_array() {
+        let v: Vec<String> = v.iter().map(jtext).collect();
+        m.fmt(format_args!(" · format versions {}", esc(&v.join(", "))));
+    }
+    m.raw("</p>\n<h2>Sources</h2>\n<div class=\"table-wrap\"><table class=\"sources\">\n<thead><tr><th>Repo</th><th>Health</th><th>Serving</th><th>Last pull</th></tr></thead>\n<tbody>\n");
+    let sources = st["sources"].as_array().cloned().unwrap_or_default();
+    for src in &sources {
+        let id = s(&src["id"]);
+        let from = format!(
+            "{} {}{}",
+            s(&src["kind"]),
+            s(&src["url"]),
+            src["ref"]
+                .as_str()
+                .map(|r| format!(" @ {r}"))
+                .unwrap_or_default()
+        );
+        m.fmt(format_args!(
+            "<tr><td class=\"src\"><a href=\"/r/{}\">{}</a><span class=\"from\"><code title=\"{}\">{}</code><button type=\"button\" class=\"copy-btn inline\" data-copy=\"{}\" hidden>Copy</button></span></td>",
+            attr(&id),
+            esc(&id),
+            attr(&from),
+            esc(&middle_ellipsis(&from, 48)),
+            attr(&from),
+        ));
+        m.fmt(format_args!(
+            "<td>{}</td>",
+            health_badge(&s(&src["health"]))
+        ));
+        let commit: String = s(&src["commit"]).chars().take(7).collect();
+        let newest: String = s(&src["newest_commit"]).chars().take(7).collect();
+        m.fmt(format_args!(
+            "<td><code class=\"sha\">{}</code>",
+            esc(&commit)
+        ));
+        if !newest.is_empty() && newest != commit {
+            m.raw(&tip(
+                "Not the newest",
+                &format!("The newest commit {newest} isn't served: it fails its checks or couldn't be read. The last good commit stays."),
+            ));
+        }
+        m.raw("</td>");
+        match src["last_pull_at"].as_str() {
+            Some(t) => {
+                let exact = match src["last_pull_ms"].as_i64() {
+                    Some(ms) => format!("{t} ({ms} ms)"),
+                    None => t.to_string(),
+                };
+                m.fmt(format_args!(
+                    "<td><time datetime=\"{}\" data-rel title=\"{}\">{}</time></td></tr>\n",
+                    attr(t),
+                    attr(&exact),
+                    esc(&short_time(t))
+                ));
+            }
+            None => {
+                m.raw("<td></td></tr>\n");
+            }
+        }
+    }
+    for r in cat
+        .repos
+        .iter()
+        .filter(|r| !sources.iter().any(|x| x["id"] == serde_json::json!(r.id)))
+    {
+        m.fmt(format_args!(
+            "<tr><td class=\"src\"><a href=\"/r/{}\">{}</a><span class=\"from\">built in</span></td><td>{}</td><td></td><td></td></tr>\n",
+            attr(&r.id),
+            esc(&r.id),
+            health_badge("ok")
+        ));
+    }
+    m.raw("</tbody></table></div>\n");
+    // Problems per source: why the newest commit isn't served, warnings.
+    for src in &sources {
+        let mut lines: Vec<String> = Vec::new();
+        if let Some(e) = src["last_pull_error"].as_str() {
+            lines.push(format!("pull: {e}"));
+        }
+        for d in src["errors"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .chain(src["warnings"].as_array().into_iter().flatten())
+        {
+            lines.push(format!(
+                "{}:{}:{}: {}: {}",
+                s(&d["path"]),
+                s(&d["line"]),
+                s(&d["col"]),
+                s(&d["severity"]),
+                s(&d["message"])
+            ));
+        }
+        if !lines.is_empty() {
+            m.fmt(format_args!(
+                "<h3><code>{}</code></h3>\n<ul class=\"status-list\">\n",
+                esc(&s(&src["id"]))
+            ));
+            for l in lines {
+                m.fmt(format_args!("<li>{}</li>\n", esc(&l)));
+            }
+            m.raw("</ul>\n");
+        }
+    }
+    if !cat.diagnostics.is_empty() {
+        m.raw("<h3>Catalog warnings</h3>\n<ul class=\"status-list\">\n");
+        for (repo, d) in &cat.diagnostics {
+            m.fmt(format_args!(
+                "<li><code>{}</code> {}</li>\n",
+                esc(repo),
+                esc(&d.to_string())
+            ));
+        }
+        m.raw("</ul>\n");
+    }
+    m.fmt(format_args!(
+        "<p class=\"status-meta\">Maybe stale entries: {}</p>\n",
+        st["maybe_stale"].as_u64().unwrap_or(0)
+    ));
+    let e = &st["embedder"];
+    m.raw("<h2>Search</h2>\n<div class=\"table-wrap\"><table class=\"kv\"><tbody>\n");
+    let row = |m: &mut H, k: &str, v: &str| {
+        if !v.is_empty() {
+            m.fmt(format_args!(
+                "<tr><th>{}</th><td>{}</td></tr>\n",
+                esc(k),
+                esc(v)
+            ));
+        }
+    };
+    row(&mut m, "Embedder", &s(&e["backend"]));
+    row(&mut m, "Model", &s(&e["model"]));
+    row(&mut m, "Dimensions", &s(&e["dims"]));
+    if e["chunks"].is_number() {
+        row(
+            &mut m,
+            "Chunks embedded",
+            &format!("{} of {}", s(&e["chunks_embedded"]), s(&e["chunks"])),
+        );
+    }
+    row(
+        &mut m,
+        "Last index",
+        &e["last_index_ms"]
+            .as_u64()
+            .map(|x| format!("{x} ms"))
+            .unwrap_or_default(),
+    );
+    row(&mut m, "Problem", &s(&e["problem"]));
+    row(
+        &mut m,
+        "Built-in golden check",
+        &s(&st["golden"]["builtin"]),
+    );
+    m.raw("</tbody></table></div>\n");
+    let list = |m: &mut H, title: &str, items: &[serde_json::Value]| {
+        if items.is_empty() {
+            return;
+        }
+        m.fmt(format_args!(
+            "<h3>{}</h3>\n<ul class=\"status-list\">\n",
+            esc(title)
+        ));
+        for f in items {
+            m.fmt(format_args!(
+                "<li><code>{}</code> {}</li>\n",
+                esc(&s(&f["repo"])),
+                esc(&s(&f["question"]))
+            ));
+        }
+        m.raw("</ul>\n");
+    };
+    let fails = st["golden"]["failures"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    list(&mut m, "Golden questions that don't pass", &fails);
+    let skipped = st["golden"]["not_loaded"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    list(
+        &mut m,
+        "Golden expects in repos that aren't loaded (skipped)",
+        &skipped,
+    );
+    if st["database"].is_object() {
+        m.raw("<h2>Database</h2>\n<div class=\"table-wrap\"><table class=\"kv\"><tbody>\n");
+        row(
+            &mut m,
+            "Size",
+            &format!("{} bytes", s(&st["database"]["size_bytes"])),
+        );
+        row(
+            &mut m,
+            "Schema version",
+            &s(&st["database"]["schema_version"]),
+        );
+        m.raw("</tbody></table></div>\n");
+    }
+    if let Some(cfg) = st["config"].as_array() {
+        m.raw("<h2>Configuration</h2>\n<div class=\"table-wrap\"><table class=\"config\">\n<thead><tr><th>Key</th><th>Value</th><th>From</th></tr></thead>\n<tbody>\n");
+        for r in cfg {
+            m.fmt(format_args!(
+                "<tr><td><code>{}</code></td><td><code>{}</code></td><td>{}</td></tr>\n",
+                esc(&s(&r["key"])),
+                esc(&s(&r["value"])),
+                esc(&s(&r["from"]))
+            ));
+        }
+        m.raw("</tbody></table></div>\n");
+    }
+    m.raw("</main>");
+    layout(ui, &cat, content, None, "Status", &m.finish())
+}

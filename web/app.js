@@ -42,7 +42,20 @@ function initTips() {
   });
 }
 
-for (const init of [initTheme, initTips, initHide, initMore, initInfo, initPalette, initTemplates, initEntry, initShow, initLive]) {
+// <time data-rel>: the server writes the exact time; show it as "5 minutes ago".
+function initTimes() {
+  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+  const units = [["year", 31536000], ["month", 2592000], ["day", 86400], ["hour", 3600], ["minute", 60], ["second", 1]];
+  for (const t of document.querySelectorAll("time[data-rel]")) {
+    const ms = Date.parse(t.dateTime);
+    if (Number.isNaN(ms)) continue;
+    const s = Math.round((ms - Date.now()) / 1000);
+    const [unit, n] = units.find(([, n]) => Math.abs(s) >= n) || units[units.length - 1];
+    t.textContent = rtf.format(Math.round(s / n), unit);
+  }
+}
+
+for (const init of [initTheme, initTips, initTimes, initHide, initMore, initInfo, initPalette, initTemplates, initEntry, initShow, initLive]) {
   try {
     init();
   } catch (err) {

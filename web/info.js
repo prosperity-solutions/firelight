@@ -22,6 +22,14 @@ export async function copyText(text) {
 }
 
 function addCopyButtons() {
+  for (const btn of document.querySelectorAll("button.copy-btn[data-copy]")) {
+    if (!btn.hidden) continue;
+    btn.hidden = false;
+    btn.addEventListener("click", async () => {
+      btn.textContent = (await copyText(btn.dataset.copy || "")) ? "Copied" : "Copy failed";
+      setTimeout(() => (btn.textContent = "Copy"), 1500);
+    });
+  }
   for (const pre of document.querySelectorAll("pre.copy")) {
     if (pre.querySelector(".copy-btn")) continue;
     const btn = h("button", { type: "button", className: "copy-btn", textContent: "Copy" });
