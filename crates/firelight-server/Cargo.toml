@@ -14,7 +14,7 @@ tokio = { version = "1", features = ["net", "signal", "sync", "macros", "rt-mult
 firelight-format = { path = "../firelight-format" }
 firelight-search = { path = "../firelight-search" }
 firelight-source = { path = "../firelight-source" }
-base64 = "0.22"
+base64 = "0.23"
 sha2 = "0.11"
 url = "2"
 opentelemetry = { version = "0.33", default-features = false, features = ["metrics"] }
@@ -27,7 +27,7 @@ tracing = "0.1"
 thiserror = "2"
 
 [dev-dependencies]
-base64 = "0.22"
+base64 = "0.23"
 rmcp = { version = "=3.9.0", default-features = false, features = ["client", "transport-streamable-http-client-reqwest", "reqwest-tls-no-provider"] }
 reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
