@@ -4,6 +4,7 @@ import { initEntry } from "./entry.js";
 import { initHide } from "./hide.js";
 import { initInfo } from "./info.js";
 import { initLive } from "./live.js";
+import { initMore } from "./more.js";
 import { initPalette } from "./palette.js";
 import { initShow } from "./show.js";
 import { initTemplates } from "./template.js";
@@ -16,8 +17,14 @@ function initTheme() {
   const stored = load(THEME_KEY);
   if (MODES.includes(stored)) root.dataset.theme = stored;
   const btn = document.querySelector('[data-action="theme"]');
+  const NAMES = { auto: "system", light: "light", dark: "dark" };
   const label = () => {
-    if (btn) btn.title = "Theme: " + (root.dataset.theme || "auto") + " (click to change)";
+    if (!btn) return;
+    const now = root.dataset.theme || "auto";
+    const next = MODES[(MODES.indexOf(now) + 1) % MODES.length];
+    const text = `Theme: ${NAMES[now] || now}. Switch to ${NAMES[next]}`;
+    btn.title = text;
+    btn.setAttribute("aria-label", text);
   };
   label();
   btn?.addEventListener("click", () => {
@@ -28,7 +35,14 @@ function initTheme() {
   });
 }
 
-for (const init of [initTheme, initHide, initInfo, initPalette, initTemplates, initEntry, initShow, initLive]) {
+// A "?" tooltip shows on hover and focus; Escape dismisses it (WCAG 1.4.13).
+function initTips() {
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && document.activeElement?.classList.contains("tip")) document.activeElement.blur();
+  });
+}
+
+for (const init of [initTheme, initTips, initHide, initMore, initInfo, initPalette, initTemplates, initEntry, initShow, initLive]) {
   try {
     init();
   } catch (err) {

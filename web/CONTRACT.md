@@ -57,12 +57,18 @@ external requests. Set styles with classes; use `el.hidden`,
       <button type="button" class="hidden-count" data-action="hidden" hidden>Hidden (<span>0</span>)</button>
       <button type="button" data-action="edit" aria-pressed="false" title="Hide things">✎</button>
       <button type="button" data-action="info" title="About this Firelight">ⓘ</button>
-      <button type="button" data-action="theme" title="Light or dark">◐</button>
+      <button type="button" data-action="theme" title="Theme: system" aria-label="Theme: system">
+        <svg class="icon theme-auto">…monitor…</svg><svg class="icon theme-light">…sun…</svg><svg class="icon theme-dark">…moon…</svg>
+      </button>                                            <!-- CSS shows the one for html[data-theme] -->
     </div>
   </div>
-  <ul class="row top">            <!-- place: top links; may be empty (then omitted) -->
-    <li>LINK</li> …
-  </ul>
+  <nav class="top-links" aria-label="Links">   <!-- place: top links; omitted when empty -->
+    <ul class="row top"><li>LINK</li> …</ul>
+    <details class="more" hidden>             <!-- JS: one line; what doesn't fit moves here. No JS: the row wraps -->
+      <summary aria-label="More links" title="More links">⋯</summary>
+      <ul class="more-list"></ul>
+    </details>
+  </nav>
 </header>
 <main> … </main>
 <footer class="bar-bottom">
@@ -82,16 +88,21 @@ buttons); the JS wires them.
 <a class="link" href="https://argo.staging.acme.example" data-ref="acme-infra/argo-staging" id="acme-infra/argo-staging">
   <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#refresh"></use></svg>
   <span class="label">Argo CD</span>
-  <span class="note">argo.staging.acme.example</span>     <!-- optional -->
 </a>
-<a class="what" href="/e/acme-infra/argocd?s=platform" title="What is this?">?</a>   <!-- optional, only when the link has an entry -->
+<button type="button" class="tip" aria-label="Argo CD: argo.staging.acme.example">   <!-- only with a note -->
+  <span aria-hidden="true">?</span><span class="tip-text" aria-hidden="true">argo.staging.acme.example</span>
+</button>
+<a class="what" href="/e/acme-infra/argocd?s=platform" title="Docs: Argo CD" aria-label="Docs: Argo CD">BOOK ICON</a>
+<!-- only when an entry documents the link: its `entry`, else the first entry listing it under `links` -->
 ```
 
 - `id` is the link's ref, only on the **first** occurrence on the page (a link
   may be placed twice). JS finds links by `[data-ref="…"]`.
-- The `<a class="what">` sits next to the link (same `<li>`); show it on hover
-  or focus of the `<li>`, always visible on touch (`@media (hover: none)`).
+- The `.tip` and `.what` sit next to the link (same `<li>`), always visible.
+  The tip's text shows on hover and on focus (so keyboard and tap work, CSS
+  only); Escape dismisses it.
 - Links open in the same tab (no `target`); they are normal anchors.
+- One look everywhere: one line per link (icon, label, "?", docs icon).
 
 ## Islands (`<main>`)
 
@@ -129,7 +140,7 @@ The Unsorted island has the extra class `unsorted`.
 ```html
 <section class="island links-island" data-ref="acme-infra/consoles" id="island:acme-infra/consoles">
   <h2>Consoles</h2><button class="eye" …>
-  <ul class="row"><li>LINK</li> …</ul>
+  <ul class="links link-grid"><li>LINK</li> …</ul>   <!-- a grid of links, not one long line -->
 </section>
 ```
 
@@ -189,7 +200,7 @@ Firelight's own dialogs start with a capital letter (`Palette`, `Info`, `Hidden`
     <!-- per hit, built by palette.js; an option holds no control:
     <li id="palette-hit-0" role="option" aria-selected="true" aria-keyshortcuts="Shift+Enter">
       <span class="kind">link</span><span class="title">Argo CD</span><span class="repo">acme-infra</span>
-      <span class="summary">…</span><span class="show-me" aria-hidden="true">Show me ✨</span></li> -->
+      <span class="show-me" aria-hidden="true" title="…">Locate</span><span class="summary" title="…">…</span></li> -->
   </ul>
   <p class="palette-empty" hidden>Nothing found.</p>
 </dialog>
@@ -236,8 +247,11 @@ Firelight's own dialogs start with a capital letter (`Palette`, `Info`, `Hidden`
 ```
 
 - Each result row: kind label (GUIDE / CONCEPT / LINK / REPO), title, repo,
-  summary (one line, ellipsis). Links also get a "Show me ✨" chip (a click
-  target for the mouse, not a control); Shift+Enter does the same from the keyboard.
+  summary (one line, ellipsis, full text as the tooltip); rows are separated by
+  a thin line. Links also get a small "Locate" chip at the end of the title line
+  (a click target for the mouse, not a control): it shows where the link sits on
+  the page, while Enter or a click on the row opens it. Shift+Enter locates from
+  the keyboard.
   Arrow keys move the selection (`aria-selected`), Enter opens `url`, Esc closes.
 - Hidden refs of the current space sort to the bottom of the results.
 
@@ -273,6 +287,19 @@ your choice; keep the plain click opening the URL).
 JS: clicking `.anchor` copies the full URL to the clipboard (and still
 navigates to it).
 
+## Guides and concepts (end of `/s/<space>`)
+
+```html
+<section class="island entries" aria-label="Guides and concepts"><div class="entry-cols">
+  <div class="entry-col"><h2>Guides</h2>
+    <ul class="entry-list"><li><a href="/e/acme-infra/request-access?s=platform" title="the summary">Request access rights</a></li> …</ul>  <!-- all, A to Z by title -->
+  </div>
+  <div class="entry-col"><h2>Concepts</h2> … </div>       <!-- a column without entries is omitted -->
+</div></section>
+```
+
+Titles only, sorted A to Z ignoring case; the summary is the tooltip.
+
 ## Space list (`/`)
 
 `<main class="space-index"><ul class="space-cards"><li><a href="/s/platform"><svg class="icon">…</svg><strong>Platform</strong><span>summary</span></a></li>…</ul></main>`
@@ -295,8 +322,8 @@ Plain, warm, accessible:
 - Light: near-white warm background, dark ink; dark mode: dark warm grey, light
   ink. `--accent` (from theme.css) for links' hover, focus rings, the glow,
   active tab. WCAG AA contrast in both.
-- `data-theme="auto"` follows `prefers-color-scheme`; the ◐ button cycles
-  auto → light → dark, stored in `localStorage["firelight:v1:theme"]` and set
+- `data-theme="auto"` follows `prefers-color-scheme`; the theme button (monitor,
+  sun or moon icon) cycles auto → light → dark, stored in `localStorage["firelight:v1:theme"]` and set
   on `<html data-theme>` (`light`/`dark` override the media query).
 - Cards flow in a responsive grid (`repeat(auto-fill, minmax(16rem, 1fr))`);
   at 375 px everything stacks, **no horizontal scroll** (long notes and URLs
@@ -304,5 +331,9 @@ Plain, warm, accessible:
 - `.tone-danger` card: a red-ish top border; `.tone-warn`: amber.
 - Notes in grey, small. Kind labels small caps.
 - Visible focus rings everywhere. Respect `prefers-reduced-motion`.
-- The header bar stays compact; the top row of links is a horizontal list that
-  wraps.
+- The header bar stays compact; the top row of links stays on one line (the
+  rest goes into "⋯"), and wraps without JS.
+- One type scale (`--fs-xs` … `--fs-xl`) and two weights (`--fw`,
+  `--fw-strong`); nothing else. Calm: labels regular, headings semibold.
+- The footer is at the window's bottom on a short page and after the content
+  on a long one; never fixed or sticky.

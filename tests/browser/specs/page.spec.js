@@ -129,3 +129,73 @@ test("the theme toggle sticks", async ({ page }) => {
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", t1);
 });
+
+test("the theme button shows a different icon per state", async ({ page }) => {
+  await page.goto("/s/platform");
+  const btn = page.locator('button[data-action="theme"]');
+  const shown = () => btn.locator("svg").evaluateAll((els) => els.filter((e) => getComputedStyle(e).display !== "none").map((e) => e.getAttribute("class")));
+  const seen = [];
+  for (let i = 0; i < 3; i++) {
+    const s = await shown();
+    expect(s).toHaveLength(1);
+    seen.push(s[0]);
+    await expect(btn).toHaveAttribute("aria-label", /^Theme: \w+\. Switch to \w+$/);
+    await btn.click();
+  }
+  expect(new Set(seen).size).toBe(3);
+});
+
+test("top links that don't fit move into More, and nothing is lost", async ({ page }) => {
+  await page.setViewportSize({ width: 300, height: 700 });
+  await page.goto("/s/platform");
+  const nav = page.locator(".bar .top-links");
+  const total = await nav.locator("a.link").count();
+  const more = nav.locator("details.more");
+  await expect(more).toBeVisible();
+  const inRow = await nav.locator("ul.row.top a.link").count();
+  const inMenu = await nav.locator(".more-list a.link").count();
+  expect(inRow + inMenu).toBe(total);
+  expect(inMenu).toBeGreaterThan(0);
+  // One line: the row never wraps.
+  const rowHeight = await nav.locator("ul.row.top").evaluate((e) => e.getBoundingClientRect().height);
+  expect(rowHeight).toBeLessThan(60);
+  // Keyboard: open with Enter, close with Escape, focus back on the button.
+  await more.locator("summary").focus();
+  await page.keyboard.press("Enter");
+  await expect(more.locator(".more-list a.link").first()).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(more).not.toHaveAttribute("open", "");
+  await expect(more.locator("summary")).toBeFocused();
+  // Wide again: everything back in the row.
+  await page.setViewportSize({ width: 1400, height: 700 });
+  await expect(more).toBeHidden();
+  expect(await nav.locator("ul.row.top a.link").count()).toBe(total);
+});
+
+test("the footer sits at the bottom of a short page and after a long one", async ({ page }) => {
+  await page.setViewportSize({ width: 1200, height: 900 });
+  await page.goto("/");
+  const footer = page.locator("footer.bar-bottom");
+  const box = await footer.boundingBox();
+  expect(Math.round(box.y + box.height)).toBe(900);
+  expect(await footer.evaluate((e) => getComputedStyle(e).position)).toBe("static");
+  await page.setViewportSize({ width: 1200, height: 300 });
+  await page.goto("/s/platform");
+  const y = await footer.evaluate((e) => e.getBoundingClientRect().top + scrollY);
+  const main = await page.locator("main").evaluate((e) => e.getBoundingClientRect().bottom + scrollY);
+  expect(y).toBeGreaterThanOrEqual(main - 1);
+  expect((await footer.boundingBox()).y).toBeGreaterThan(300); // not pinned to the window
+});
+
+test("a link's note shows on keyboard focus of its ? and hides on Escape", async ({ page }) => {
+  await page.goto("/s/platform");
+  const li = page.locator('li:has(> a.link[data-ref="acme-infra/argo-staging"])').first();
+  const tip = li.locator("button.tip");
+  await expect(tip).toHaveAttribute("aria-label", "Argo CD: argo.staging.acme.example");
+  await expect(li.locator(".tip-text")).toBeHidden();
+  await tip.focus();
+  await expect(li.locator(".tip-text")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(li.locator(".tip-text")).toBeHidden();
+  await expect(li.locator("a.what")).toHaveAttribute("href", /\/e\/acme-infra\/argocd/);
+});

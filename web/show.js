@@ -8,6 +8,8 @@ export function showRef(ref) {
   const el = byRef(ref, "a.link[data-ref]")[0];
   if (!el) return false;
   reveal(el);
+  const menu = el.closest("details");
+  if (menu) menu.open = true; // a top link that moved into "More"
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   el.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
   el.classList.remove("glow");

@@ -8,7 +8,7 @@ expression: "pages::island_html(&c.0, &unsorted, Some(\"platform\"), &mut Defaul
 <article class="card" data-ref="platform/-unsorted/acme-app">
 <h3>App</h3><button type="button" class="eye" data-hide="platform/-unsorted/acme-app" aria-pressed="false" title="Hide">👁</button>
 <ul class="links">
-<li><a class="link" href="https://dash.acme.example" data-ref="acme-app/old-dashboard" id="acme-app/old-dashboard"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#chart"></use></svg><span class="label">Old dashboard</span><span class="note">going away</span></a></li>
+<li><a class="link" href="https://dash.acme.example" data-ref="acme-app/old-dashboard" id="acme-app/old-dashboard"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#chart"></use></svg><span class="label">Old dashboard</span></a><button type="button" class="tip" aria-label="Old dashboard: going away"><span aria-hidden="true">?</span><span class="tip-text" aria-hidden="true">going away</span></button></li>
 </ul>
 </article>
 </div>

@@ -724,8 +724,10 @@ Plain HTML rendered by the server, one classless-first stylesheet, and a few sma
 - **Space switcher:** the title is followed by the current space's name as a button (`Firelight·acme › Platform ▾`). It opens a list of every space with its summary, plus **All** at the bottom. URLs: `/s/<space>` for a space, `/s/all` for the super space, `/` per `ui.default_space`. ⌘K searches the current space; in `/s/all` it searches everything.
 - Entry pages (`/e/<repo>/<id>`) don't belong to one space; "← Back" goes to the space you came from via an optional `?s=<space>` parameter added by in-page links. Permalinks themselves stay id-only.
 - Cards flow in a responsive grid. At phone width everything stacks; no horizontal scroll.
-- A link shows its note in grey. Hovering a link with an `entry` shows a small "What is this?" affordance that opens the concept.
-- Light and dark follow the system, with a toggle.
+- A link is one line: icon and label, then a "?" that shows its note on hover, focus or tap, then a book icon to the entry about it (its `entry`, else an entry that lists it under `links`). The top row stays on one line; what doesn't fit goes into a "⋯" menu.
+- After the islands, a space lists all its **Guides** and **Concepts** in two columns, A to Z, titles only (summary as tooltip).
+- One small type scale and two weights; the footer sits at the window's bottom on short pages and is never fixed.
+- Light and dark follow the system, with a toggle whose icon shows the state (monitor = system, sun, moon).
 
 ### 18.2 ⌘K search
 ```
@@ -733,11 +735,11 @@ Plain HTML rendered by the server, one classless-first stylesheet, and a few sma
 │ GUIDE    Request access rights                    infra-repo     ⏎  │
 │          "Open the access portal, pick the role, give a reason…"    │
 │ CONCEPT  Access model                             infra-repo        │
-│ LINK     Access portal                [Show me ✨]  top row          │
+│ LINK     Access portal   infra-repo                     [Locate]   │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 - Arrow keys and Enter; `/` also opens it.
-- "Show me" closes the palette, goes to `/s/<space>#<link-ref>` (the current space if the link is placed there, else the link's first space), scrolls to the real link and pulses it for 2 s (respecting `prefers-reduced-motion`). Unhides it for that moment if hidden.
+- Enter or a click opens a result. A link result also has a small **Locate** chip (Shift+Enter from the keyboard): it closes the palette, goes to `/s/<space>#<link-ref>` (the current space if the link is placed there, else the link's first space), scrolls to the real link and pulses it for 2 s (respecting `prefers-reduced-motion`). Unhides it for that moment if hidden.
 - Without JS: the search box is a `GET /s/<space>/search?q=` form with a server-rendered results page.
 
 ### 18.3 Entry page (`/e/<repo>/<id>`)

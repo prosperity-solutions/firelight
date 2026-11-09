@@ -158,18 +158,21 @@ pub fn layout_with_ids(
         "<form class=\"search\" role=\"search\" action=\"/s/{}/search\" method=\"get\">\n<input type=\"search\" name=\"q\" placeholder=\"Search or ask…\" aria-label=\"Search\" autocomplete=\"off\">\n<kbd class=\"hint\">⌘K</kbd>\n</form>\n",
         attr(search_space)
     ));
-    h.raw("<div class=\"tools\">\n<button type=\"button\" class=\"hidden-count\" data-action=\"hidden\" hidden>Hidden (<span>0</span>)</button>\n<button type=\"button\" data-action=\"edit\" aria-pressed=\"false\" title=\"Hide things\">✎</button>\n<button type=\"button\" data-action=\"info\" title=\"About this Firelight\">ⓘ</button>\n<button type=\"button\" data-action=\"theme\" title=\"Light or dark\">◐</button>\n</div>\n</div>\n");
+    h.raw("<div class=\"tools\">\n<button type=\"button\" class=\"hidden-count\" data-action=\"hidden\" hidden>Hidden (<span>0</span>)</button>\n<button type=\"button\" data-action=\"edit\" aria-pressed=\"false\" title=\"Hide things\">✎</button>\n<button type=\"button\" data-action=\"info\" title=\"About this Firelight\">ⓘ</button>\n");
+    h.raw(THEME_BUTTON);
+    h.raw("</div>\n</div>\n");
     let sp = space.and_then(|s| cat.space(s));
     if let Some(sp) = sp
         && !sp.top.is_empty()
     {
-        h.raw("<ul class=\"row top\">\n");
+        // One row; with JS, what doesn't fit moves into "More" (web/more.js).
+        h.raw("<nav class=\"top-links\" aria-label=\"Links\">\n<ul class=\"row top\">\n");
         for l in &sp.top {
             h.raw("<li>")
                 .raw(&link_html(cat, l, space, &mut ids))
                 .raw("</li>\n");
         }
-        h.raw("</ul>\n");
+        h.raw("</ul>\n<details class=\"more\" hidden>\n<summary aria-label=\"More links\" title=\"More links\">⋯</summary>\n<ul class=\"more-list\"></ul>\n</details>\n</nav>\n");
     }
     h.raw("</header>\n")
         .raw(main)
@@ -210,7 +213,32 @@ fn icon(name: &str) -> String {
     )
 }
 
+/// The entry that documents a link: its own `entry`, else the first entry
+/// (in source order) that lists it under `links`.
+fn docs_entry(cat: &Catalog, l: &PlacedLink) -> Option<(Ref, String)> {
+    if let Some(e) = &l.entry
+        && let Some(x) = cat.entry(e)
+    {
+        return Some((e.clone(), x.title.clone()));
+    }
+    cat.repos.iter().find_map(|repo| {
+        repo.entries.iter().find_map(|e| {
+            e.links.iter().any(|(r, _)| *r == l.link).then(|| {
+                (
+                    Ref {
+                        repo: repo.id.clone(),
+                        id: e.id.clone(),
+                    },
+                    e.title.clone(),
+                )
+            })
+        })
+    })
+}
+
 /// One link, per the contract; `ids` holds the refs that already have an `id`.
+/// The note is a "?" tooltip after the label (hover, keyboard focus, tap);
+/// a book icon links to the entry about the link, when there is one.
 pub fn link_html(
     cat: &Catalog,
     l: &PlacedLink,
@@ -235,21 +263,26 @@ pub fn link_html(
         h.raw(&icon(i));
     }
     h.fmt(format_args!(
-        "<span class=\"label\">{}</span>",
+        "<span class=\"label\">{}</span></a>",
         esc(&l.label)
     ));
     if let Some(n) = &l.note {
-        h.fmt(format_args!("<span class=\"note\">{}</span>", esc(n)));
+        h.fmt(format_args!(
+            "<button type=\"button\" class=\"tip\" aria-label=\"{}: {}\"><span aria-hidden=\"true\">?</span><span class=\"tip-text\" aria-hidden=\"true\">{}</span></button>",
+            attr(&l.label),
+            attr(n),
+            esc(n)
+        ));
     }
-    h.raw("</a>");
-    if let Some(e) = &l.entry
-        && cat.entry(e).is_some()
-    {
+    if let Some((e, title)) = docs_entry(cat, l) {
         let s = space.map(|s| format!("?s={}", attr(s))).unwrap_or_default();
         h.fmt(format_args!(
-            "<a class=\"what\" href=\"/e/{}/{}{s}\" title=\"What is this?\">?</a>",
+            "<a class=\"what\" href=\"/e/{}/{}{s}\" title=\"Docs: {}\" aria-label=\"Docs: {}\">{}</a>",
             attr(&e.repo),
-            attr(&e.id)
+            attr(&e.id),
+            attr(&title),
+            attr(&title),
+            icon("book")
         ));
     }
     h.finish()
@@ -327,7 +360,7 @@ pub fn island_html(
             h.raw("</div>\n</section>\n");
         }
         PlacedKind::Links { links } => {
-            h.fmt(format_args!("<section class=\"island links-island\" data-ref=\"{}\" id=\"{}\">\n<h2>{}</h2>{}\n<ul class=\"row\">\n", attr(&r), attr(&id), esc(&i.title), eye(&r)));
+            h.fmt(format_args!("<section class=\"island links-island\" data-ref=\"{}\" id=\"{}\">\n<h2>{}</h2>{}\n<ul class=\"links link-grid\">\n", attr(&r), attr(&id), esc(&i.title), eye(&r)));
             for l in links {
                 h.raw("<li>")
                     .raw(&link_html(cat, l, space, ids))
@@ -516,22 +549,39 @@ pub fn space_page(
             fills.get(&i.r),
         ));
     }
-    if !s.entries.is_empty() {
-        main.raw("<section class=\"island entries\"><h2>Concepts and guides</h2>\n<ul class=\"entry-list\">\n");
-        for r in &s.entries {
-            if let Some(e) = cat.entry(r) {
+    let entries: Vec<_> = s
+        .entries
+        .iter()
+        .filter_map(|r| cat.entry(r).map(|e| (r, e)))
+        .collect();
+    if !entries.is_empty() {
+        main.raw("<section class=\"island entries\" aria-label=\"Guides and concepts\">\n<div class=\"entry-cols\">\n");
+        for (kind, heading) in [
+            (EntryKind::Guide, "Guides"),
+            (EntryKind::Concept, "Concepts"),
+        ] {
+            let mut list: Vec<_> = entries.iter().filter(|(_, e)| e.kind == kind).collect();
+            list.sort_by_cached_key(|(_, e)| e.title.to_lowercase());
+            if list.is_empty() {
+                continue;
+            }
+            main.fmt(format_args!(
+                "<div class=\"entry-col\">\n<h2>{heading}</h2>\n<ul class=\"entry-list\">\n"
+            ));
+            for (r, e) in &list {
                 main.fmt(format_args!(
-                    "<li><span class=\"kind\">{}</span> <a href=\"/e/{}/{}?s={}\">{}</a> <span class=\"summary\">{}</span></li>\n",
-                    kind_label(e.kind),
+                    "<li><a href=\"/e/{}/{}?s={}\" title=\"{}\">{}</a></li>\n",
                     attr(&r.repo),
                     attr(&r.id),
                     attr(space),
-                    esc(&e.title),
-                    esc(&e.summary)
+                    attr(&e.summary),
+                    esc(&e.title)
                 ));
             }
+            main.raw("</ul>\n");
+            main.raw("</div>\n");
         }
-        main.raw("</ul>\n</section>\n");
+        main.raw("</div>\n</section>\n");
     }
     main.raw("</main>");
     let title = s.title.clone();
@@ -545,6 +595,16 @@ pub fn space_page(
         ids,
     ))
 }
+
+/// The theme button: one icon per state, picked by CSS from `html[data-theme]`
+/// (Lucide monitor, sun, moon; web/icons.txt has the licence).
+const THEME_BUTTON: &str = concat!(
+    "<button type=\"button\" data-action=\"theme\" title=\"Theme: system\" aria-label=\"Theme: system\">",
+    "<svg class=\"icon theme-auto\" aria-hidden=\"true\"><use href=\"/assets/icons.svg#monitor\"></use></svg>",
+    "<svg class=\"icon theme-light\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"4\"/><path d=\"M12 2v2M12 20v2m-7.07-17.07 1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41\"/></svg>",
+    "<svg class=\"icon theme-dark\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z\"/></svg>",
+    "</button>\n"
+);
 
 fn kind_label(k: EntryKind) -> &'static str {
     match k {

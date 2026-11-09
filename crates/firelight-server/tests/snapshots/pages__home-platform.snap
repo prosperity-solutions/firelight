@@ -36,14 +36,20 @@ expression: "pages::space_page(&ui, c.as_ref(), \"platform\",\n&BTreeMap::new())
 <button type="button" class="hidden-count" data-action="hidden" hidden>Hidden (<span>0</span>)</button>
 <button type="button" data-action="edit" aria-pressed="false" title="Hide things">✎</button>
 <button type="button" data-action="info" title="About this Firelight">ⓘ</button>
-<button type="button" data-action="theme" title="Light or dark">◐</button>
+<button type="button" data-action="theme" title="Theme: system" aria-label="Theme: system"><svg class="icon theme-auto" aria-hidden="true"><use href="/assets/icons.svg#monitor"></use></svg><svg class="icon theme-light" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2m-7.07-17.07 1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg><svg class="icon theme-dark" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></button>
 </div>
 </div>
+<nav class="top-links" aria-label="Links">
 <ul class="row top">
-<li><a class="link" href="https://access.acme.example" data-ref="acme-infra/access-portal" id="acme-infra/access-portal"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#key"></use></svg><span class="label">Access</span></a><a class="what" href="/e/acme-infra/access-model?s=platform" title="What is this?">?</a></li>
+<li><a class="link" href="https://access.acme.example" data-ref="acme-infra/access-portal" id="acme-infra/access-portal"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#key"></use></svg><span class="label">Access</span></a><a class="what" href="/e/acme-infra/access-model?s=platform" title="Docs: Access model" aria-label="Docs: Access model"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#book"></use></svg></a></li>
 <li><a class="link" href="https://errors.acme.example" data-ref="acme-app/errors" id="acme-app/errors"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#bug"></use></svg><span class="label">Errors</span></a></li>
 <li><a class="link" href="https://chat.acme.example" data-ref="acme-app/team-chat" id="acme-app/team-chat"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#message"></use></svg><span class="label">Team chat</span></a></li>
 </ul>
+<details class="more" hidden>
+<summary aria-label="More links" title="More links">⋯</summary>
+<ul class="more-list"></ul>
+</details>
+</nav>
 </header>
 <main class="space">
 <section class="island cards" data-ref="acme-infra/environments" id="island:acme-infra/environments">
@@ -52,20 +58,20 @@ expression: "pages::space_page(&ui, c.as_ref(), \"platform\",\n&BTreeMap::new())
 <article class="card tone-danger" data-ref="acme-infra/environments/production">
 <h3>Production</h3><button type="button" class="eye" data-hide="acme-infra/environments/production" aria-pressed="false" title="Hide">👁</button>
 <h4>apps</h4><ul class="links">
-<li><a class="link" href="https://app.acme.example" data-ref="acme-app/app-production" id="acme-app/app-production"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#globe"></use></svg><span class="label">App</span><span class="note">app.acme.example</span></a></li>
+<li><a class="link" href="https://app.acme.example" data-ref="acme-app/app-production" id="acme-app/app-production"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#globe"></use></svg><span class="label">App</span></a><button type="button" class="tip" aria-label="App: app.acme.example"><span aria-hidden="true">?</span><span class="tip-text" aria-hidden="true">app.acme.example</span></button></li>
 <li><a class="link" href="https://api.acme.example" data-ref="acme-app/api-production" id="acme-app/api-production"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#server"></use></svg><span class="label">API</span></a></li>
 </ul>
 <h4>tools</h4><ul class="links">
-<li><a class="link" href="https://argo.acme.example" data-ref="acme-infra/argo-production" id="acme-infra/argo-production"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#refresh"></use></svg><span class="label">Argo CD</span><span class="note">argo.acme.example</span></a><a class="what" href="/e/acme-infra/argocd?s=platform" title="What is this?">?</a></li>
+<li><a class="link" href="https://argo.acme.example" data-ref="acme-infra/argo-production" id="acme-infra/argo-production"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#refresh"></use></svg><span class="label">Argo CD</span></a><button type="button" class="tip" aria-label="Argo CD: argo.acme.example"><span aria-hidden="true">?</span><span class="tip-text" aria-hidden="true">argo.acme.example</span></button><a class="what" href="/e/acme-infra/argocd?s=platform" title="Docs: Argo CD" aria-label="Docs: Argo CD"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#book"></use></svg></a></li>
 </ul>
 </article>
 <article class="card" data-ref="acme-infra/environments/staging">
 <h3>Staging</h3><button type="button" class="eye" data-hide="acme-infra/environments/staging" aria-pressed="false" title="Hide">👁</button>
 <h4>apps</h4><ul class="links">
-<li><a class="link" href="https://app.staging.acme.example" data-ref="acme-app/app-staging" id="acme-app/app-staging"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#globe"></use></svg><span class="label">App</span></a></li>
+<li><a class="link" href="https://app.staging.acme.example" data-ref="acme-app/app-staging" id="acme-app/app-staging"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#globe"></use></svg><span class="label">App</span></a><a class="what" href="/e/acme-app/deploy-an-app?s=platform" title="Docs: Deploy the app" aria-label="Docs: Deploy the app"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#book"></use></svg></a></li>
 </ul>
 <h4>tools</h4><ul class="links">
-<li><a class="link" href="https://argo.staging.acme.example" data-ref="acme-infra/argo-staging" id="acme-infra/argo-staging"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#refresh"></use></svg><span class="label">Argo CD</span><span class="note">argo.staging.acme.example</span></a><a class="what" href="/e/acme-infra/argocd?s=platform" title="What is this?">?</a></li>
+<li><a class="link" href="https://argo.staging.acme.example" data-ref="acme-infra/argo-staging" id="acme-infra/argo-staging"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#refresh"></use></svg><span class="label">Argo CD</span></a><button type="button" class="tip" aria-label="Argo CD: argo.staging.acme.example"><span aria-hidden="true">?</span><span class="tip-text" aria-hidden="true">argo.staging.acme.example</span></button><a class="what" href="/e/acme-infra/argocd?s=platform" title="Docs: Argo CD" aria-label="Docs: Argo CD"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#book"></use></svg></a></li>
 <li><a class="link" href="https://traces.staging.acme.example" data-ref="acme-infra/traces-staging" id="acme-infra/traces-staging"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#activity"></use></svg><span class="label">Traces</span></a></li>
 </ul>
 </article>
@@ -79,7 +85,7 @@ expression: "pages::space_page(&ui, c.as_ref(), \"platform\",\n&BTreeMap::new())
 </section>
 <section class="island links-island" data-ref="acme-infra/consoles" id="island:acme-infra/consoles">
 <h2>Consoles</h2><button type="button" class="eye" data-hide="acme-infra/consoles" aria-pressed="false" title="Hide">👁</button>
-<ul class="row">
+<ul class="links link-grid">
 <li><a class="link" href="https://console.cloud.acme.example" data-ref="acme-infra/cloud-console" id="acme-infra/cloud-console"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#cloud"></use></svg><span class="label">Cloud console</span></a></li>
 </ul>
 </section>
@@ -100,20 +106,30 @@ expression: "pages::space_page(&ui, c.as_ref(), \"platform\",\n&BTreeMap::new())
 <article class="card" data-ref="platform/-unsorted/acme-app">
 <h3>App</h3><button type="button" class="eye" data-hide="platform/-unsorted/acme-app" aria-pressed="false" title="Hide">👁</button>
 <ul class="links">
-<li><a class="link" href="https://dash.acme.example" data-ref="acme-app/old-dashboard" id="acme-app/old-dashboard"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#chart"></use></svg><span class="label">Old dashboard</span><span class="note">going away</span></a></li>
+<li><a class="link" href="https://dash.acme.example" data-ref="acme-app/old-dashboard" id="acme-app/old-dashboard"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#chart"></use></svg><span class="label">Old dashboard</span></a><button type="button" class="tip" aria-label="Old dashboard: going away"><span aria-hidden="true">?</span><span class="tip-text" aria-hidden="true">going away</span></button></li>
 </ul>
 </article>
 </div>
 </section>
-<section class="island entries"><h2>Concepts and guides</h2>
+<section class="island entries" aria-label="Guides and concepts">
+<div class="entry-cols">
+<div class="entry-col">
+<h2>Guides</h2>
 <ul class="entry-list">
-<li><span class="kind">Guide</span> <a href="/e/acme-app/deploy-an-app?s=platform">Deploy the app</a> <span class="summary">From a merged pull request to the app running in staging and production.</span></li>
-<li><span class="kind">Guide</span> <a href="/e/acme-app/onboarding?s=platform">Onboarding</a> <span class="summary">Your first day on the app team: accounts, access, and your first deploy.</span></li>
-<li><span class="kind">Concept</span> <a href="/e/acme-app/release-train?s=platform">Release train</a> <span class="summary">The app ships to production every Tuesday and Thursday; anything merged before noon goes along.</span></li>
-<li><span class="kind">Concept</span> <a href="/e/acme-infra/access-model?s=platform">Access model</a> <span class="summary">Who may do what in Acme&#39;s cloud accounts, and how admin rights are granted for a limited time.</span></li>
-<li><span class="kind">Concept</span> <a href="/e/acme-infra/argocd?s=platform">Argo CD</a> <span class="summary">Rolls every Helm release in this repo out to its cluster, and shows what is deployed where.</span></li>
-<li><span class="kind">Guide</span> <a href="/e/acme-infra/request-access?s=platform">Request access rights</a> <span class="summary">Get time-limited admin rights for a cloud account, with a reason.</span></li>
+<li><a href="/e/acme-app/deploy-an-app?s=platform" title="From a merged pull request to the app running in staging and production.">Deploy the app</a></li>
+<li><a href="/e/acme-app/onboarding?s=platform" title="Your first day on the app team: accounts, access, and your first deploy.">Onboarding</a></li>
+<li><a href="/e/acme-infra/request-access?s=platform" title="Get time-limited admin rights for a cloud account, with a reason.">Request access rights</a></li>
 </ul>
+</div>
+<div class="entry-col">
+<h2>Concepts</h2>
+<ul class="entry-list">
+<li><a href="/e/acme-infra/access-model?s=platform" title="Who may do what in Acme&#39;s cloud accounts, and how admin rights are granted for a limited time.">Access model</a></li>
+<li><a href="/e/acme-infra/argocd?s=platform" title="Rolls every Helm release in this repo out to its cluster, and shows what is deployed where.">Argo CD</a></li>
+<li><a href="/e/acme-app/release-train?s=platform" title="The app ships to production every Tuesday and Thursday; anything merged before noon goes along.">Release train</a></li>
+</ul>
+</div>
+</div>
 </section>
 </main>
 <footer class="bar-bottom">
