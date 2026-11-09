@@ -199,3 +199,40 @@ test("a link's note shows on keyboard focus of its ? and hides on Escape", async
   await expect(li.locator(".tip-text")).toBeHidden();
   await expect(li.locator("a.what")).toHaveAttribute("href", /\/e\/acme-infra\/argocd/);
 });
+
+test("a wide table scrolls in its own box, words stay whole", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 800 });
+  await page.goto("/e/acme-infra/request-access");
+  const wrap = page.locator(".prose .table-wrap").first();
+  const sizes = await wrap.evaluate((e) => ({ scroll: e.scrollWidth, client: e.clientWidth }));
+  expect(sizes.scroll).toBeGreaterThan(sizes.client);
+  const cell = await page.locator(".prose td").first().evaluate((e) => e.getBoundingClientRect().width);
+  expect(cell).toBeGreaterThanOrEqual(140);
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+});
+
+test("repo pages: reachable from the header menu, with breadcrumbs back", async ({ page }) => {
+  await page.goto("/s/platform");
+  await page.locator(".space-switch summary").click();
+  await page.locator('.space-list a[href="/r/acme-infra"]').click();
+  await expect(page).toHaveURL(/\/r\/acme-infra$/);
+  await expect(page.locator(".space-switch summary")).toHaveText("Infra");
+  await expect(page.locator(".crumbs a").first()).toHaveAttribute("href", "/s/platform");
+  await expect(page.locator(".entry-col h2", { hasText: "Guides" })).toBeVisible();
+  await page.locator(".entry-list a", { hasText: "Request access rights" }).click();
+  const crumbs = page.locator(".crumbs li");
+  await expect(crumbs).toHaveText(["Platform", "Infra", "Request access rights"]);
+  await expect(page.locator(".crumbs a").nth(1)).toHaveAttribute("href", "/r/acme-infra?s=platform");
+});
+
+test("eyes are line icons and flip to eye-off when hidden", async ({ page }) => {
+  await page.goto("/s/platform");
+  await page.click('button[data-action="edit"]');
+  const eye = page.locator('li:has(> a.link[data-ref="acme-infra/argo-staging"]) .acts button.eye').first();
+  await expect(eye.locator("svg.i-eye")).toBeVisible();
+  await eye.click();
+  await expect(eye.locator("svg.i-eye-off")).toBeVisible();
+  await expect(eye).toHaveAttribute("aria-label", "Show again");
+  await eye.click();
+});

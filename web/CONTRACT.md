@@ -40,12 +40,16 @@ external requests. Set styles with classes; use `el.hidden`,
     <nav class="brand" aria-label="Spaces">
       <a class="title" href="/">Firelight·acme</a>
       <span class="sep">›</span>
-      <details class="space-switch">                      <!-- works without JS -->
-        <summary>Platform</summary>
-        <ul class="space-list">
+      <details class="space-switch">                      <!-- works without JS; Escape closes it -->
+        <summary>Platform</summary>                         <!-- on /r/<repo>: the repo's name -->
+        <ul class="space-list">                             <!-- scrolls when long -->
+          <li class="group" aria-hidden="true">Spaces</li>
           <li><a href="/s/platform" aria-current="page">Platform<small>Environments, clusters…</small></a></li>
           <li><a href="/s/support">Support<small>…</small></a></li>
           <li class="all"><a href="/s/all">All<small>Everything on one page</small></a></li>
+          <li class="sep" role="separator"></li>
+          <li class="group" aria-hidden="true">Repositories</li>
+          <li><a href="/r/acme-infra">Infra<small>Terraform and Helm…</small></a></li>   <!-- A to Z -->
         </ul>
       </details>
     </nav>
@@ -55,7 +59,7 @@ external requests. Set styles with classes; use `el.hidden`,
     </form>
     <div class="tools">
       <button type="button" class="hidden-count" data-action="hidden" hidden>Hidden (<span>0</span>)</button>
-      <button type="button" data-action="edit" aria-pressed="false" title="Hide things">✎</button>
+      <button type="button" data-action="edit" aria-pressed="false" title="Show or hide things" aria-label="Show or hide things">EYE ICON</button>
       <button type="button" data-action="info" title="About this Firelight">ⓘ</button>
       <button type="button" data-action="theme" title="Theme: system" aria-label="Theme: system">
         <svg class="icon theme-auto">…monitor…</svg><svg class="icon theme-light">…sun…</svg><svg class="icon theme-dark">…moon…</svg>
@@ -89,20 +93,23 @@ buttons); the JS wires them.
   <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#refresh"></use></svg>
   <span class="label">Argo CD</span>
 </a>
-<button type="button" class="tip" aria-label="Argo CD: argo.staging.acme.example">   <!-- only with a note -->
-  <span aria-hidden="true">?</span><span class="tip-text" aria-hidden="true">argo.staging.acme.example</span>
-</button>
-<a class="what" href="/e/acme-infra/argocd?s=platform" title="Docs: Argo CD" aria-label="Docs: Argo CD">BOOK ICON</a>
-<!-- only when an entry documents the link: its `entry`, else the first entry listing it under `links` -->
+<span class="acts">   <!-- fixed slots, right-aligned in cards and grids: [?] [docs] [eye] -->
+  <button type="button" class="tip" aria-label="Argo CD: argo.staging.acme.example">   <!-- <span class="slot"></span> without a note -->
+    <span aria-hidden="true">?</span><span class="tip-text" aria-hidden="true">argo.staging.acme.example</span>
+  </button>
+  <a class="what" href="/e/acme-infra/argocd?s=platform" title="Docs: Argo CD" aria-label="Docs: Argo CD">BOOK ICON</a>
+  <!-- the entry about the link: its `entry`, else the first entry listing it under `links`; else <span class="slot"></span> -->
+</span>
 ```
 
 - `id` is the link's ref, only on the **first** occurrence on the page (a link
   may be placed twice). JS finds links by `[data-ref="…"]`.
-- The `.tip` and `.what` sit next to the link (same `<li>`), always visible.
+- The actions sit in `.acts` after the link (same `<li>`), always visible; in
+  edit mode JS adds the eye as the last slot.
   The tip's text shows on hover and on focus (so keyboard and tap work, CSS
   only); Escape dismisses it.
 - Links open in the same tab (no `target`); they are normal anchors.
-- One look everywhere: one line per link (icon, label, "?", docs icon).
+- One look everywhere: one line per link: icon and label, then the actions.
 
 ## Islands (`<main>`)
 
@@ -140,6 +147,7 @@ The Unsorted island has the extra class `unsorted`.
 ```html
 <section class="island links-island" data-ref="acme-infra/consoles" id="island:acme-infra/consoles">
   <h2>Consoles</h2><button class="eye" …>
+  <!-- when every link is the island's own repo's: <h2><a class="repo-head" href="/r/acme-infra?s=platform">Consoles <span aria-hidden="true">›</span></a></h2> -->
   <ul class="links link-grid"><li>LINK</li> …</ul>   <!-- a grid of links, not one long line -->
 </section>
 ```
@@ -170,7 +178,8 @@ never `innerHTML` with server strings) or show the error. Debounce 200 ms.
 
 ## Hiding (edit mode)
 
-- `✎` toggles `document.body.classList.toggle("editing")` and `aria-pressed`.
+- The eye button toggles `document.body.classList.toggle("editing")` and `aria-pressed`.
+  Every eye is the eye line icon; a pressed (hidden) one shows eye-off.
   `.eye` buttons are only visible while `body.editing`.
 - Every island, card and **link `<li>`** can be hidden. Link `<li>`s get their
   eye from JS: in edit mode, add `<button class="eye" data-hide="<link ref>">`
@@ -272,8 +281,10 @@ your choice; keep the plain click opening the URL).
 
 ```html
 <main class="entry">
-  <p class="back"><a href="/s/platform">← Platform</a></p>        <!-- from ?s=, else the entry's first space -->
-  <p class="meta"><span class="kind">Guide</span> · <a href="/r/acme-infra">acme-infra</a>
+  <nav class="crumbs" aria-label="Breadcrumb"><ol>      <!-- space from ?s=, else the entry's first space -->
+    <li><a href="/s/platform">Platform</a></li><li><a href="/r/acme-infra?s=platform">Infra</a></li><li><span aria-current="page">Request access rights</span></li>
+  </ol></nav>
+  <p class="meta"><span class="kind">Guide</span>
      <span class="stale" title="…">⚠ maybe stale</span></p>       <!-- only when stale -->
   <h1>Request access rights</h1>
   <p class="summary">Get time-limited admin rights…</p>
@@ -285,7 +296,18 @@ your choice; keep the plain click opening the URL).
 ```
 
 JS: clicking `.anchor` copies the full URL to the clipboard (and still
-navigates to it).
+navigates to it). A fresh visit without a `#fragment` starts at the top.
+
+Markdown tables come wrapped: `<div class="table-wrap" tabindex="0" role="region"
+aria-label="Table"><table>…</table></div>`. The box scrolls sideways; cells
+keep a minimum width and never break words.
+
+## Repo page (`/r/<repo>`)
+
+`<main class="entry repo">`: breadcrumbs (Space › Repo; space from `?s=`, else
+the repo's first space), kind "Repo", name, summary, owner, the about text,
+**Links** (every link of the repo, A to Z, as LINK in a `.link-grid`), the
+Guides and Concepts columns, and Relations.
 
 ## Guides and concepts (end of `/s/<space>`)
 
@@ -298,15 +320,31 @@ navigates to it).
 </div></section>
 ```
 
-Titles only, sorted A to Z ignoring case; the summary is the tooltip.
+Titles only, sorted A to Z ignoring case; the summary is the tooltip. The
+same columns show on `/r/<repo>`.
+
+After them, every repo with content in the space (on `/s/all`: every repo):
+
+```html
+<section class="island repos"><h2>Repositories</h2><ul class="links link-grid">
+  <li><a class="link" href="/r/acme-infra?s=platform">GIT ICON<span class="label">Infra</span></a><span class="acts">TIP (the summary)</span></li> …
+</ul></section>
+```
+
+A space page with nothing on it shows nothing (no empty-state text).
 
 ## Space list (`/`)
 
-`<main class="space-index"><ul class="space-cards"><li><a href="/s/platform"><svg class="icon">…</svg><strong>Platform</strong><span>summary</span></a></li>…</ul></main>`
+`<main class="space-index"><h2>Spaces</h2><ul class="space-cards"><li><a href="/s/platform"><svg class="icon">…</svg><strong>Platform</strong><span>summary</span></a></li>…</ul>
+<h2>Repositories</h2><ul class="space-cards repo-cards"><li><a href="/r/acme-infra"><strong>Infra</strong><span>summary</span></a></li>…</ul></main>`
+
+With a single space (and no `ui.default_space`), `/` redirects to it instead.
 
 ## Search results page (no JS)
 
-`<main class="search-page"><h1>Results for “…”</h1><ol class="hits"><li><span class="kind">Guide</span> <a href="…">Title</a> <span class="repo">acme-infra</span><p>summary</p></li></ol></main>`
+`<main class="search-page"><h1>Results for “…”</h1><ol class="hits"><li><span class="kind">Guide</span> <a href="…">Title</a> <a class="repo" href="/r/acme-infra?s=platform">acme-infra</a><p>summary</p></li></ol></main>`
+
+In the ⌘K palette the repo name is a mouse shortcut to the repo page.
 
 ## Live reload (`firelight preview` only)
 

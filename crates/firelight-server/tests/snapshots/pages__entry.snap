@@ -3,8 +3,8 @@ source: crates/firelight-server/tests/pages.rs
 expression: "main_of(&pages::entry_page(&ui, c.as_ref(), &Ref\n{ repo: \"acme-infra\".into(), id: \"request-access\".into() },\nSome(\"platform\")).unwrap_or_default())"
 ---
 <main class="entry">
-<p class="back"><a href="/s/platform">← Platform</a></p>
-<p class="meta"><span class="kind">Guide</span> · <a href="/r/acme-infra">acme-infra</a></p>
+<nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/s/platform">Platform</a></li><li><a href="/r/acme-infra?s=platform">Infra</a></li><li><span aria-current="page">Request access rights</span></li></ol></nav>
+<p class="meta"><span class="kind">Guide</span></p>
 <h1>Request access rights</h1>
 <p class="summary">Get time-limited admin rights for a cloud account, with a reason.</p>
 <div class="prose">
@@ -13,7 +13,11 @@ expression: "main_of(&pages::entry_page(&ui, c.as_ref(), &Ref\n{ repo: \"acme-in
 <li>Pick the role and give a reason.</li>
 <li>The rights end on their own after four hours.</li>
 </ol>
-<h2 id="what-it-does-not-do">What it does not do <a class="anchor" href="#what-it-does-not-do" aria-label="Link to this section">🔗</a></h2>
+<h2 id="roles-per-environment">Roles per environment <a class="anchor" href="#roles-per-environment" aria-label="Link to this section">🔗</a></h2><div class="table-wrap" tabindex="0" role="region" aria-label="Table"><table><thead><tr><th>Environment</th><th>Role</th><th>Approver</th><th>Portal</th><th>Lasts</th></tr></thead><tbody>
+<tr><td>Production</td><td><code>admin-production-eu-west</code></td><td>Platform on-call</td><td><code>access.acme.example/production</code></td><td>4 hours</td></tr>
+<tr><td>Staging</td><td><code>admin-staging-eu-west</code></td><td>Any platform engineer</td><td><code>access.acme.example/staging</code></td><td>8 hours</td></tr>
+</tbody></table>
+</div><h2 id="what-it-does-not-do">What it does not do <a class="anchor" href="#what-it-does-not-do" aria-label="Link to this section">🔗</a></h2>
 <p>It never grants rights to other people. See
 <a href="/e/acme-infra/access-model?s=platform#what-it-is-not">the access model</a>.</p>
 </div>

@@ -21,7 +21,7 @@ expression: "serde_json::to_string_pretty(&v).unwrap_or_default()"
       "url": "https://access.acme.example"
     }
   ],
-  "markdown": "1. Open [the access portal](link:access-portal).\n2. Pick the role and give a reason.\n3. The rights end on their own after four hours.\n\n## What it does not do\n\nIt never grants rights to other people. See\n[the access model](entry:access-model#what-it-is-not).\n",
+  "markdown": "1. Open [the access portal](link:access-portal).\n2. Pick the role and give a reason.\n3. The rights end on their own after four hours.\n\n## Roles per environment\n\n| Environment | Role | Approver | Portal | Lasts |\n|---|---|---|---|---|\n| Production | `admin-production-eu-west` | Platform on-call | `access.acme.example/production` | 4 hours |\n| Staging | `admin-staging-eu-west` | Any platform engineer | `access.acme.example/staging` | 8 hours |\n\n## What it does not do\n\nIt never grants rights to other people. See\n[the access model](entry:access-model#what-it-is-not).\n",
   "path": ".firelight/guides/request-access.md",
   "permalink": "https://firelight.acme.example/e/acme-infra/request-access",
   "ref": "acme-infra/request-access",

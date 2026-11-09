@@ -696,7 +696,7 @@ Plain HTML rendered by the server, one classless-first stylesheet, and a few sma
 ### 18.1 Home
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ Firelight·acme          [ 🔍 Search or ask…   ⌘K ]          ⓘ   ✎        │
+│ Firelight·acme          [ 🔍 Search or ask…   ⌘K ]          ⓘ   👁        │
 │ Chat · Errors · Analytics · Access · Design system        ← place: top  │
 ├─────────────────────────────────────────────────────────────────────────┤
 │ ENVIRONMENTS                                                  👁        │
@@ -724,7 +724,8 @@ Plain HTML rendered by the server, one classless-first stylesheet, and a few sma
 - **Space switcher:** the title is followed by the current space's name as a button (`Firelight·acme › Platform ▾`). It opens a list of every space with its summary, plus **All** at the bottom. URLs: `/s/<space>` for a space, `/s/all` for the super space, `/` per `ui.default_space`. ⌘K searches the current space; in `/s/all` it searches everything.
 - Entry pages (`/e/<repo>/<id>`) don't belong to one space; "← Back" goes to the space you came from via an optional `?s=<space>` parameter added by in-page links. Permalinks themselves stay id-only.
 - Cards flow in a responsive grid. At phone width everything stacks; no horizontal scroll.
-- A link is one line: icon and label, then a "?" that shows its note on hover, focus or tap, then a book icon to the entry about it (its `entry`, else an entry that lists it under `links`). The top row stays on one line; what doesn't fit goes into a "⋯" menu.
+- A link is one line: icon and label, then its actions in fixed, right-aligned slots: a "?" that shows its note on hover, focus or tap, a book icon to the entry about it (its `entry`, else an entry that lists it under `links`), and in edit mode the eye. The top row stays on one line; what doesn't fit goes into a "⋯" menu.
+- Repos are first-class in the UI: the header menu lists Spaces, then Repositories; `/` shows both; each space page ends with its repos; a links island holding only its repo's links has a heading that leads to `/r/<repo>`; entry and repo pages carry breadcrumbs (Space › Repo › Entry); search results link the repo. `/r/<repo>` shows the about text, every link, and the Guides and Concepts columns.
 - After the islands, a space lists all its **Guides** and **Concepts** in two columns, A to Z, titles only (summary as tooltip).
 - One small type scale and two weights; the footer sits at the window's bottom on short pages and is never fixed.
 - Light and dark follow the system, with a toggle whose icon shows the state (monitor = system, sun, moon).
@@ -757,7 +758,7 @@ Plain HTML rendered by the server, one classless-first stylesheet, and a few sma
 ```
 Permalinks: `/e/<repo>/<id>` and `#<heading-slug>`; each heading has a copy-link button. The URL depends on ids, never titles.
 
-### 18.4 Customising (✎ edit mode)
+### 18.4 Customising (eye: edit mode)
 - An eye on every island, card and link. Hidden items vanish from the page and drop in search (§9.3).
 - **"Hidden (n)"** in the header opens a modal listing everything hidden, with per-item unhide and "Reset".
 - Stored in `localStorage` under `firelight:v1:hidden:<space>` as a list of refs, so hiding is per space. Every read and write is wrapped in try/catch; without storage the page simply shows everything.

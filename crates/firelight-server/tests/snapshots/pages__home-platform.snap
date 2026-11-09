@@ -22,9 +22,14 @@ expression: "pages::space_page(&ui, c.as_ref(), \"platform\",\n&BTreeMap::new())
 <details class="space-switch">
 <summary>Platform</summary>
 <ul class="space-list">
+<li class="group" aria-hidden="true">Spaces</li>
 <li><a href="/s/platform" aria-current="page">Platform<small>Environments, clusters, access, deploys.</small></a></li>
 <li><a href="/s/support">Support<small>What the support team needs every day.</small></a></li>
 <li class="all"><a href="/s/all">All<small>Everything on one page</small></a></li>
+<li class="sep" role="separator"></li>
+<li class="group" aria-hidden="true">Repositories</li>
+<li><a href="/r/acme-app">App<small>The Acme web app and its API, deployed to every environment.</small></a></li>
+<li><a href="/r/acme-infra">Infra<small>Terraform and Helm for the clusters every Acme app runs on.</small></a></li>
 </ul>
 </details>
 </nav>
@@ -34,16 +39,16 @@ expression: "pages::space_page(&ui, c.as_ref(), \"platform\",\n&BTreeMap::new())
 </form>
 <div class="tools">
 <button type="button" class="hidden-count" data-action="hidden" hidden>Hidden (<span>0</span>)</button>
-<button type="button" data-action="edit" aria-pressed="false" title="Hide things">✎</button>
+<button type="button" data-action="edit" aria-pressed="false" title="Show or hide things" aria-label="Show or hide things"><svg class="icon i-eye" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></svg></button>
 <button type="button" data-action="info" title="About this Firelight">ⓘ</button>
 <button type="button" data-action="theme" title="Theme: system" aria-label="Theme: system"><svg class="icon theme-auto" aria-hidden="true"><use href="/assets/icons.svg#monitor"></use></svg><svg class="icon theme-light" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2m-7.07-17.07 1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg><svg class="icon theme-dark" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></button>
 </div>
 </div>
 <nav class="top-links" aria-label="Links">
 <ul class="row top">
-<li><a class="link" href="https://access.acme.example" data-ref="acme-infra/access-portal" id="acme-infra/access-portal"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#key"></use></svg><span class="label">Access</span></a><a class="what" href="/e/acme-infra/access-model?s=platform" title="Docs: Access model" aria-label="Docs: Access model"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#book"></use></svg></a></li>
-<li><a class="link" href="https://errors.acme.example" data-ref="acme-app/errors" id="acme-app/errors"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#bug"></use></svg><span class="label">Errors</span></a></li>
-<li><a class="link" href="https://chat.acme.example" data-ref="acme-app/team-chat" id="acme-app/team-chat"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#message"></use></svg><span class="label">Team chat</span></a></li>
+<li><a class="link" href="https://access.acme.example" data-ref="acme-infra/access-portal" id="acme-infra/access-portal"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#key"></use></svg><span class="label">Access</span></a><span class="acts"><span class="slot"></span><a class="what" href="/e/acme-infra/access-model?s=platform" title="Docs: Access model" aria-label="Docs: Access model"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#book"></use></svg></a></span></li>
+<li><a class="link" href="https://errors.acme.example" data-ref="acme-app/errors" id="acme-app/errors"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#bug"></use></svg><span class="label">Errors</span></a><span class="acts"><span class="slot"></span><span class="slot"></span></span></li>
+<li><a class="link" href="https://chat.acme.example" data-ref="acme-app/team-chat" id="acme-app/team-chat"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#message"></use></svg><span class="label">Team chat</span></a><span class="acts"><span class="slot"></span><span class="slot"></span></span></li>
 </ul>
 <details class="more" hidden>
 <summary aria-label="More links" title="More links">⋯</summary>
@@ -53,44 +58,44 @@ expression: "pages::space_page(&ui, c.as_ref(), \"platform\",\n&BTreeMap::new())
 </header>
 <main class="space">
 <section class="island cards" data-ref="acme-infra/environments" id="island:acme-infra/environments">
-<h2>Environments</h2><button type="button" class="eye" data-hide="acme-infra/environments" aria-pressed="false" title="Hide">👁</button>
+<h2>Environments</h2><button type="button" class="eye" data-hide="acme-infra/environments" aria-pressed="false" title="Hide" aria-label="Hide"><svg class="icon i-eye" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></svg><svg class="icon i-eye-off" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.73 5.08a10.74 10.74 0 0 1 11.2 6.57 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-1.44 2.49"/><path d="M14.08 14.16a3 3 0 0 1-4.24-4.24"/><path d="M17.48 17.5a10.75 10.75 0 0 1-15.42-5.15 1 1 0 0 1 0-.7 10.75 10.75 0 0 1 4.45-5.14"/><path d="m2 2 20 20"/></svg></button>
 <div class="card-grid">
 <article class="card tone-danger" data-ref="acme-infra/environments/production">
-<h3>Production</h3><button type="button" class="eye" data-hide="acme-infra/environments/production" aria-pressed="false" title="Hide">👁</button>
+<h3>Production</h3><button type="button" class="eye" data-hide="acme-infra/environments/production" aria-pressed="false" title="Hide" aria-label="Hide"><svg class="icon i-eye" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></svg><svg class="icon i-eye-off" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.73 5.08a10.74 10.74 0 0 1 11.2 6.57 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-1.44 2.49"/><path d="M14.08 14.16a3 3 0 0 1-4.24-4.24"/><path d="M17.48 17.5a10.75 10.75 0 0 1-15.42-5.15 1 1 0 0 1 0-.7 10.75 10.75 0 0 1 4.45-5.14"/><path d="m2 2 20 20"/></svg></button>
 <h4>apps</h4><ul class="links">
-<li><a class="link" href="https://app.acme.example" data-ref="acme-app/app-production" id="acme-app/app-production"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#globe"></use></svg><span class="label">App</span></a><button type="button" class="tip" aria-label="App: app.acme.example"><span aria-hidden="true">?</span><span class="tip-text" aria-hidden="true">app.acme.example</span></button></li>
-<li><a class="link" href="https://api.acme.example" data-ref="acme-app/api-production" id="acme-app/api-production"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#server"></use></svg><span class="label">API</span></a></li>
+<li><a class="link" href="https://app.acme.example" data-ref="acme-app/app-production" id="acme-app/app-production"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#globe"></use></svg><span class="label">App</span></a><span class="acts"><button type="button" class="tip" aria-label="App: app.acme.example"><span aria-hidden="true">?</span><span class="tip-text" aria-hidden="true">app.acme.example</span></button><span class="slot"></span></span></li>
+<li><a class="link" href="https://api.acme.example" data-ref="acme-app/api-production" id="acme-app/api-production"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#server"></use></svg><span class="label">API</span></a><span class="acts"><span class="slot"></span><span class="slot"></span></span></li>
 </ul>
 <h4>tools</h4><ul class="links">
-<li><a class="link" href="https://argo.acme.example" data-ref="acme-infra/argo-production" id="acme-infra/argo-production"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#refresh"></use></svg><span class="label">Argo CD</span></a><button type="button" class="tip" aria-label="Argo CD: argo.acme.example"><span aria-hidden="true">?</span><span class="tip-text" aria-hidden="true">argo.acme.example</span></button><a class="what" href="/e/acme-infra/argocd?s=platform" title="Docs: Argo CD" aria-label="Docs: Argo CD"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#book"></use></svg></a></li>
+<li><a class="link" href="https://argo.acme.example" data-ref="acme-infra/argo-production" id="acme-infra/argo-production"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#refresh"></use></svg><span class="label">Argo CD</span></a><span class="acts"><button type="button" class="tip" aria-label="Argo CD: argo.acme.example"><span aria-hidden="true">?</span><span class="tip-text" aria-hidden="true">argo.acme.example</span></button><a class="what" href="/e/acme-infra/argocd?s=platform" title="Docs: Argo CD" aria-label="Docs: Argo CD"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#book"></use></svg></a></span></li>
 </ul>
 </article>
 <article class="card" data-ref="acme-infra/environments/staging">
-<h3>Staging</h3><button type="button" class="eye" data-hide="acme-infra/environments/staging" aria-pressed="false" title="Hide">👁</button>
+<h3>Staging</h3><button type="button" class="eye" data-hide="acme-infra/environments/staging" aria-pressed="false" title="Hide" aria-label="Hide"><svg class="icon i-eye" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></svg><svg class="icon i-eye-off" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.73 5.08a10.74 10.74 0 0 1 11.2 6.57 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-1.44 2.49"/><path d="M14.08 14.16a3 3 0 0 1-4.24-4.24"/><path d="M17.48 17.5a10.75 10.75 0 0 1-15.42-5.15 1 1 0 0 1 0-.7 10.75 10.75 0 0 1 4.45-5.14"/><path d="m2 2 20 20"/></svg></button>
 <h4>apps</h4><ul class="links">
-<li><a class="link" href="https://app.staging.acme.example" data-ref="acme-app/app-staging" id="acme-app/app-staging"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#globe"></use></svg><span class="label">App</span></a><a class="what" href="/e/acme-app/deploy-an-app?s=platform" title="Docs: Deploy the app" aria-label="Docs: Deploy the app"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#book"></use></svg></a></li>
+<li><a class="link" href="https://app.staging.acme.example" data-ref="acme-app/app-staging" id="acme-app/app-staging"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#globe"></use></svg><span class="label">App</span></a><span class="acts"><span class="slot"></span><a class="what" href="/e/acme-app/deploy-an-app?s=platform" title="Docs: Deploy the app" aria-label="Docs: Deploy the app"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#book"></use></svg></a></span></li>
 </ul>
 <h4>tools</h4><ul class="links">
-<li><a class="link" href="https://argo.staging.acme.example" data-ref="acme-infra/argo-staging" id="acme-infra/argo-staging"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#refresh"></use></svg><span class="label">Argo CD</span></a><button type="button" class="tip" aria-label="Argo CD: argo.staging.acme.example"><span aria-hidden="true">?</span><span class="tip-text" aria-hidden="true">argo.staging.acme.example</span></button><a class="what" href="/e/acme-infra/argocd?s=platform" title="Docs: Argo CD" aria-label="Docs: Argo CD"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#book"></use></svg></a></li>
-<li><a class="link" href="https://traces.staging.acme.example" data-ref="acme-infra/traces-staging" id="acme-infra/traces-staging"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#activity"></use></svg><span class="label">Traces</span></a></li>
+<li><a class="link" href="https://argo.staging.acme.example" data-ref="acme-infra/argo-staging" id="acme-infra/argo-staging"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#refresh"></use></svg><span class="label">Argo CD</span></a><span class="acts"><button type="button" class="tip" aria-label="Argo CD: argo.staging.acme.example"><span aria-hidden="true">?</span><span class="tip-text" aria-hidden="true">argo.staging.acme.example</span></button><a class="what" href="/e/acme-infra/argocd?s=platform" title="Docs: Argo CD" aria-label="Docs: Argo CD"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#book"></use></svg></a></span></li>
+<li><a class="link" href="https://traces.staging.acme.example" data-ref="acme-infra/traces-staging" id="acme-infra/traces-staging"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#activity"></use></svg><span class="label">Traces</span></a><span class="acts"><span class="slot"></span><span class="slot"></span></span></li>
 </ul>
 </article>
 <article class="card" data-ref="acme-infra/environments/demo">
-<h3>Demo</h3><button type="button" class="eye" data-hide="acme-infra/environments/demo" aria-pressed="false" title="Hide">👁</button>
+<h3>Demo</h3><button type="button" class="eye" data-hide="acme-infra/environments/demo" aria-pressed="false" title="Hide" aria-label="Hide"><svg class="icon i-eye" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></svg><svg class="icon i-eye-off" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.73 5.08a10.74 10.74 0 0 1 11.2 6.57 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-1.44 2.49"/><path d="M14.08 14.16a3 3 0 0 1-4.24-4.24"/><path d="M17.48 17.5a10.75 10.75 0 0 1-15.42-5.15 1 1 0 0 1 0-.7 10.75 10.75 0 0 1 4.45-5.14"/><path d="m2 2 20 20"/></svg></button>
 <h4>apps</h4><ul class="links">
-<li><a class="link" href="https://demo.acme.example" data-ref="acme-app/app-demo" id="acme-app/app-demo"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#globe"></use></svg><span class="label">App</span></a></li>
+<li><a class="link" href="https://demo.acme.example" data-ref="acme-app/app-demo" id="acme-app/app-demo"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#globe"></use></svg><span class="label">App</span></a><span class="acts"><span class="slot"></span><span class="slot"></span></span></li>
 </ul>
 </article>
 </div>
 </section>
 <section class="island links-island" data-ref="acme-infra/consoles" id="island:acme-infra/consoles">
-<h2>Consoles</h2><button type="button" class="eye" data-hide="acme-infra/consoles" aria-pressed="false" title="Hide">👁</button>
+<h2><a class="repo-head" href="/r/acme-infra?s=platform">Consoles <span aria-hidden="true">›</span></a></h2><button type="button" class="eye" data-hide="acme-infra/consoles" aria-pressed="false" title="Hide" aria-label="Hide"><svg class="icon i-eye" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></svg><svg class="icon i-eye-off" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.73 5.08a10.74 10.74 0 0 1 11.2 6.57 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-1.44 2.49"/><path d="M14.08 14.16a3 3 0 0 1-4.24-4.24"/><path d="M17.48 17.5a10.75 10.75 0 0 1-15.42-5.15 1 1 0 0 1 0-.7 10.75 10.75 0 0 1 4.45-5.14"/><path d="m2 2 20 20"/></svg></button>
 <ul class="links link-grid">
-<li><a class="link" href="https://console.cloud.acme.example" data-ref="acme-infra/cloud-console" id="acme-infra/cloud-console"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#cloud"></use></svg><span class="label">Cloud console</span></a></li>
+<li><a class="link" href="https://console.cloud.acme.example" data-ref="acme-infra/cloud-console" id="acme-infra/cloud-console"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#cloud"></use></svg><span class="label">Cloud console</span></a><span class="acts"><span class="slot"></span><span class="slot"></span></span></li>
 </ul>
 </section>
 <section class="island template" data-ref="acme-app/previews" id="island:acme-app/previews">
-<h2>PR previews</h2><button type="button" class="eye" data-hide="acme-app/previews" aria-pressed="false" title="Hide">👁</button>
+<h2>PR previews</h2><button type="button" class="eye" data-hide="acme-app/previews" aria-pressed="false" title="Hide" aria-label="Hide"><svg class="icon i-eye" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></svg><svg class="icon i-eye-off" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.73 5.08a10.74 10.74 0 0 1 11.2 6.57 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-1.44 2.49"/><path d="M14.08 14.16a3 3 0 0 1-4.24-4.24"/><path d="M17.48 17.5a10.75 10.75 0 0 1-15.42-5.15 1 1 0 0 1 0-.7 10.75 10.75 0 0 1 4.45-5.14"/><path d="m2 2 20 20"/></svg></button>
 <form class="template-form" method="get" action="/i/acme-app/previews">
 <input type="hidden" name="s" value="platform">
 <label>PR # <input name="pr" placeholder="1234" required autocomplete="off"></label>
@@ -101,12 +106,12 @@ expression: "pages::space_page(&ui, c.as_ref(), \"platform\",\n&BTreeMap::new())
 <p class="template-error" hidden></p>
 </section>
 <section class="island cards unsorted" data-ref="platform/-unsorted" id="island:platform/-unsorted">
-<h2>Unsorted</h2><button type="button" class="eye" data-hide="platform/-unsorted" aria-pressed="false" title="Hide">👁</button>
+<h2>Unsorted</h2><button type="button" class="eye" data-hide="platform/-unsorted" aria-pressed="false" title="Hide" aria-label="Hide"><svg class="icon i-eye" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></svg><svg class="icon i-eye-off" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.73 5.08a10.74 10.74 0 0 1 11.2 6.57 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-1.44 2.49"/><path d="M14.08 14.16a3 3 0 0 1-4.24-4.24"/><path d="M17.48 17.5a10.75 10.75 0 0 1-15.42-5.15 1 1 0 0 1 0-.7 10.75 10.75 0 0 1 4.45-5.14"/><path d="m2 2 20 20"/></svg></button>
 <div class="card-grid">
 <article class="card" data-ref="platform/-unsorted/acme-app">
-<h3>App</h3><button type="button" class="eye" data-hide="platform/-unsorted/acme-app" aria-pressed="false" title="Hide">👁</button>
+<h3>App</h3><button type="button" class="eye" data-hide="platform/-unsorted/acme-app" aria-pressed="false" title="Hide" aria-label="Hide"><svg class="icon i-eye" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></svg><svg class="icon i-eye-off" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.73 5.08a10.74 10.74 0 0 1 11.2 6.57 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-1.44 2.49"/><path d="M14.08 14.16a3 3 0 0 1-4.24-4.24"/><path d="M17.48 17.5a10.75 10.75 0 0 1-15.42-5.15 1 1 0 0 1 0-.7 10.75 10.75 0 0 1 4.45-5.14"/><path d="m2 2 20 20"/></svg></button>
 <ul class="links">
-<li><a class="link" href="https://dash.acme.example" data-ref="acme-app/old-dashboard" id="acme-app/old-dashboard"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#chart"></use></svg><span class="label">Old dashboard</span></a><button type="button" class="tip" aria-label="Old dashboard: going away"><span aria-hidden="true">?</span><span class="tip-text" aria-hidden="true">going away</span></button></li>
+<li><a class="link" href="https://dash.acme.example" data-ref="acme-app/old-dashboard" id="acme-app/old-dashboard"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#chart"></use></svg><span class="label">Old dashboard</span></a><span class="acts"><button type="button" class="tip" aria-label="Old dashboard: going away"><span aria-hidden="true">?</span><span class="tip-text" aria-hidden="true">going away</span></button><span class="slot"></span></span></li>
 </ul>
 </article>
 </div>
@@ -131,11 +136,17 @@ expression: "pages::space_page(&ui, c.as_ref(), \"platform\",\n&BTreeMap::new())
 </div>
 </div>
 </section>
+<section class="island repos"><h2>Repositories</h2>
+<ul class="links link-grid">
+<li><a class="link" href="/r/acme-app?s=platform"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#git"></use></svg><span class="label">App</span></a><span class="acts"><button type="button" class="tip" aria-label="App: The Acme web app and its API, deployed to every environment."><span aria-hidden="true">?</span><span class="tip-text" aria-hidden="true">The Acme web app and its API, deployed to every environment.</span></button></span></li>
+<li><a class="link" href="/r/acme-infra?s=platform"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#git"></use></svg><span class="label">Infra</span></a><span class="acts"><button type="button" class="tip" aria-label="Infra: Terraform and Helm for the clusters every Acme app runs on."><span aria-hidden="true">?</span><span class="tip-text" aria-hidden="true">Terraform and Helm for the clusters every Acme app runs on.</span></button></span></li>
+</ul>
+</section>
 </main>
 <footer class="bar-bottom">
 <ul class="row footer">
-<li><a class="link" href="https://git.acme.example/acme/acme-app" data-ref="acme-app/repo" id="acme-app/repo"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#git"></use></svg><span class="label">acme-app</span></a></li>
-<li><a class="link" href="https://status.acme.example" data-ref="acme-infra/status-page" id="acme-infra/status-page"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#activity"></use></svg><span class="label">Status</span></a></li>
+<li><a class="link" href="https://git.acme.example/acme/acme-app" data-ref="acme-app/repo" id="acme-app/repo"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#git"></use></svg><span class="label">acme-app</span></a><span class="acts"><span class="slot"></span><span class="slot"></span></span></li>
+<li><a class="link" href="https://status.acme.example" data-ref="acme-infra/status-page" id="acme-infra/status-page"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#activity"></use></svg><span class="label">Status</span></a><span class="acts"><span class="slot"></span><span class="slot"></span></span></li>
 </ul>
 <p class="colophon">Firelight v0.0.0-test · <a href="/spec">Format</a> · <a href="/status">Status</a></p>
 </footer>

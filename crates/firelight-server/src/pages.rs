@@ -84,13 +84,35 @@ impl Resolve for PageResolve<'_> {
     }
 }
 
-/// The shell around every page.
 /// The shell; `ids` are the link refs that already have an `id` in `main`.
 pub fn layout_with_ids(
     ui: &Ui,
     cat: &Catalog,
     content: &dyn Content,
     space: Option<&str>,
+    title: &str,
+    main: &str,
+    ids: BTreeSet<Ref>,
+) -> String {
+    shell(ui, cat, content, space, None, title, main, ids)
+}
+
+/// Repos A to Z by name (ignoring case).
+fn repos_sorted(cat: &Catalog) -> Vec<&firelight_format::model::Repo> {
+    let mut v: Vec<_> = cat.repos.iter().collect();
+    v.sort_by_cached_key(|r| r.name.to_lowercase());
+    v
+}
+
+/// The shell around every page. `repo`: the repo page being shown (the
+/// header menu then names it).
+#[allow(clippy::too_many_arguments)]
+fn shell(
+    ui: &Ui,
+    cat: &Catalog,
+    content: &dyn Content,
+    space: Option<&str>,
+    repo: Option<&str>,
     title: &str,
     main: &str,
     mut ids: BTreeSet<Ref>,
@@ -121,14 +143,15 @@ pub fn layout_with_ids(
         esc(&ui.title)
     ));
     let spaces = visible_spaces(cat);
-    let current_title = match space {
-        Some(SPACE_ALL) => Some("All".to_string()),
-        Some(s) => cat.space(s).map(|x| x.title.clone()),
-        None => None,
+    let current_title = match (repo.and_then(|r| cat.repo(r)), space) {
+        (Some(r), _) => Some(r.name.clone()),
+        (None, Some(SPACE_ALL)) => Some("All".to_string()),
+        (None, Some(s)) => cat.space(s).map(|x| x.title.clone()),
+        (None, None) => None,
     };
     h.raw("<span class=\"sep\">›</span>\n<details class=\"space-switch\">\n");
     h.fmt(format_args!(
-        "<summary>{}</summary>\n<ul class=\"space-list\">\n",
+        "<summary>{}</summary>\n<ul class=\"space-list\">\n<li class=\"group\" aria-hidden=\"true\">Spaces</li>\n",
         esc(current_title.as_deref().unwrap_or("Spaces"))
     ));
     for s in &spaces {
@@ -152,13 +175,39 @@ pub fn layout_with_ids(
     } else {
         ""
     };
-    h.fmt(format_args!("<li class=\"all\"><a href=\"/s/all\"{cur}>All<small>Everything on one page</small></a></li>\n</ul>\n</details>\n</nav>\n"));
+    h.fmt(format_args!(
+        "<li class=\"all\"><a href=\"/s/all\"{cur}>All<small>Everything on one page</small></a></li>\n"
+    ));
+    let repos = repos_sorted(cat);
+    if !repos.is_empty() {
+        h.raw("<li class=\"sep\" role=\"separator\"></li>\n<li class=\"group\" aria-hidden=\"true\">Repositories</li>\n");
+        for r in repos {
+            let cur = if repo == Some(r.id.as_str()) {
+                " aria-current=\"page\""
+            } else {
+                ""
+            };
+            h.fmt(format_args!(
+                "<li><a href=\"/r/{}\"{cur}>{}<small>{}</small></a></li>\n",
+                attr(&r.id),
+                esc(&r.name),
+                esc(&r.summary)
+            ));
+        }
+    }
+    h.raw("</ul>\n</details>\n</nav>\n");
     let search_space = space.unwrap_or(SPACE_ALL);
     h.fmt(format_args!(
         "<form class=\"search\" role=\"search\" action=\"/s/{}/search\" method=\"get\">\n<input type=\"search\" name=\"q\" placeholder=\"Search or ask…\" aria-label=\"Search\" autocomplete=\"off\">\n<kbd class=\"hint\">⌘K</kbd>\n</form>\n",
         attr(search_space)
     ));
-    h.raw("<div class=\"tools\">\n<button type=\"button\" class=\"hidden-count\" data-action=\"hidden\" hidden>Hidden (<span>0</span>)</button>\n<button type=\"button\" data-action=\"edit\" aria-pressed=\"false\" title=\"Hide things\">✎</button>\n<button type=\"button\" data-action=\"info\" title=\"About this Firelight\">ⓘ</button>\n");
+    h.raw("<div class=\"tools\">\n<button type=\"button\" class=\"hidden-count\" data-action=\"hidden\" hidden>Hidden (<span>0</span>)</button>\n");
+    h.fmt(format_args!(
+        "<button type=\"button\" data-action=\"edit\" aria-pressed=\"false\" title=\"Show or hide things\" aria-label=\"Show or hide things\">{EYE_SVG}</button>\n"
+    ));
+    h.raw(
+        "<button type=\"button\" data-action=\"info\" title=\"About this Firelight\">ⓘ</button>\n",
+    );
     h.raw(THEME_BUTTON);
     h.raw("</div>\n</div>\n");
     let sp = space.and_then(|s| cat.space(s));
@@ -266,33 +315,110 @@ pub fn link_html(
         "<span class=\"label\">{}</span></a>",
         esc(&l.label)
     ));
-    if let Some(n) = &l.note {
-        h.fmt(format_args!(
-            "<button type=\"button\" class=\"tip\" aria-label=\"{}: {}\"><span aria-hidden=\"true\">?</span><span class=\"tip-text\" aria-hidden=\"true\">{}</span></button>",
-            attr(&l.label),
-            attr(n),
-            esc(n)
-        ));
+    // The actions, right-aligned in fixed slots so rows line up: "?", docs,
+    // and (in edit mode, added by JS) the eye.
+    h.raw("<span class=\"acts\">");
+    match &l.note {
+        Some(n) => h.raw(&tip(&l.label, n)),
+        None => h.raw("<span class=\"slot\"></span>"),
+    };
+    match docs_entry(cat, l) {
+        Some((e, title)) => {
+            let s = space.map(|s| format!("?s={}", attr(s))).unwrap_or_default();
+            h.fmt(format_args!(
+                "<a class=\"what\" href=\"/e/{}/{}{s}\" title=\"Docs: {}\" aria-label=\"Docs: {}\">{}</a>",
+                attr(&e.repo),
+                attr(&e.id),
+                attr(&title),
+                attr(&title),
+                icon("book")
+            ));
+        }
+        None => {
+            h.raw("<span class=\"slot\"></span>");
+        }
     }
-    if let Some((e, title)) = docs_entry(cat, l) {
-        let s = space.map(|s| format!("?s={}", attr(s))).unwrap_or_default();
-        h.fmt(format_args!(
-            "<a class=\"what\" href=\"/e/{}/{}{s}\" title=\"Docs: {}\" aria-label=\"Docs: {}\">{}</a>",
-            attr(&e.repo),
-            attr(&e.id),
-            attr(&title),
-            attr(&title),
-            icon("book")
-        ));
-    }
+    h.raw("</span>");
     h.finish()
 }
 
 fn eye(r: &str) -> String {
     format!(
-        "<button type=\"button\" class=\"eye\" data-hide=\"{}\" aria-pressed=\"false\" title=\"Hide\">👁</button>",
+        "<button type=\"button\" class=\"eye\" data-hide=\"{}\" aria-pressed=\"false\" title=\"Hide\" aria-label=\"Hide\">{EYE_SVG}{EYE_OFF_SVG}</button>",
         attr(r)
     )
+}
+
+/// The "?" that shows a note on hover, focus or tap.
+fn tip(label: &str, note: &str) -> String {
+    format!(
+        "<button type=\"button\" class=\"tip\" aria-label=\"{}: {}\"><span aria-hidden=\"true\">?</span><span class=\"tip-text\" aria-hidden=\"true\">{}</span></button>",
+        attr(label),
+        attr(note),
+        esc(note)
+    )
+}
+
+/// Guides and concepts in two columns, each A to Z.
+fn entry_columns(entries: &[(Ref, &Entry)], space: Option<&str>) -> String {
+    let mut h = H::new();
+    if entries.is_empty() {
+        return String::new();
+    }
+    let s = space.map(|s| format!("?s={}", attr(s))).unwrap_or_default();
+    h.raw("<section class=\"island entries\" aria-label=\"Guides and concepts\">\n<div class=\"entry-cols\">\n");
+    for (kind, heading) in [
+        (EntryKind::Guide, "Guides"),
+        (EntryKind::Concept, "Concepts"),
+    ] {
+        let mut list: Vec<_> = entries.iter().filter(|(_, e)| e.kind == kind).collect();
+        if list.is_empty() {
+            continue;
+        }
+        list.sort_by_cached_key(|(_, e)| e.title.to_lowercase());
+        h.fmt(format_args!(
+            "<div class=\"entry-col\">\n<h2>{heading}</h2>\n<ul class=\"entry-list\">\n"
+        ));
+        for (r, e) in list {
+            h.fmt(format_args!(
+                "<li><a href=\"/e/{}/{}{s}\" title=\"{}\">{}</a></li>\n",
+                attr(&r.repo),
+                attr(&r.id),
+                attr(&e.summary),
+                esc(&e.title)
+            ));
+        }
+        h.raw("</ul>\n</div>\n");
+    }
+    h.raw("</div>\n</section>\n");
+    h.finish()
+}
+
+/// The repos as one-line links, A to Z, the summary behind "?".
+fn repo_list(cat: &Catalog, ids: Option<&BTreeSet<String>>, space: Option<&str>) -> String {
+    let repos: Vec<_> = repos_sorted(cat)
+        .into_iter()
+        .filter(|r| ids.is_none_or(|ids| ids.contains(&r.id)))
+        .collect();
+    if repos.is_empty() {
+        return String::new();
+    }
+    let s = space.map(|s| format!("?s={}", attr(s))).unwrap_or_default();
+    let mut h = H::new();
+    h.raw(
+        "<section class=\"island repos\"><h2>Repositories</h2>\n<ul class=\"links link-grid\">\n",
+    );
+    for r in repos {
+        h.fmt(format_args!(
+            "<li><a class=\"link\" href=\"/r/{}{s}\">{}<span class=\"label\">{}</span></a><span class=\"acts\">{}</span></li>\n",
+            attr(&r.id),
+            icon("git"),
+            esc(&r.name),
+            tip(&r.name, &r.summary)
+        ));
+    }
+    h.raw("</ul>\n</section>\n");
+    h.finish()
 }
 
 fn card_html(
@@ -360,7 +486,25 @@ pub fn island_html(
             h.raw("</div>\n</section>\n");
         }
         PlacedKind::Links { links } => {
-            h.fmt(format_args!("<section class=\"island links-island\" data-ref=\"{}\" id=\"{}\">\n<h2>{}</h2>{}\n<ul class=\"links link-grid\">\n", attr(&r), attr(&id), esc(&i.title), eye(&r)));
+            // A links island holding only its own repo's links is that repo's
+            // section: its heading leads to the repo page.
+            let own = !i.unsorted
+                && cat.repo(&i.r.repo).is_some()
+                && links.iter().all(|l| l.link.repo == i.r.repo);
+            let title = if own {
+                let s = space
+                    .filter(|s| *s != SPACE_ALL)
+                    .map(|s| format!("?s={}", attr(s)))
+                    .unwrap_or_default();
+                format!(
+                    "<a class=\"repo-head\" href=\"/r/{}{s}\">{} <span aria-hidden=\"true\">›</span></a>",
+                    attr(&i.r.repo),
+                    esc(&i.title)
+                )
+            } else {
+                esc(&i.title)
+            };
+            h.fmt(format_args!("<section class=\"island links-island\" data-ref=\"{}\" id=\"{}\">\n<h2>{title}</h2>{}\n<ul class=\"links link-grid\">\n", attr(&r), attr(&id), eye(&r)));
             for l in links {
                 h.raw("<li>")
                     .raw(&link_html(cat, l, space, ids))
@@ -524,6 +668,7 @@ pub fn space_page(
             }
             main.raw("</section>\n");
         }
+        main.raw(&repo_list(&cat, None, Some(SPACE_ALL)));
         main.raw("</main>");
         return Some(layout_with_ids(
             ui,
@@ -537,9 +682,6 @@ pub fn space_page(
     }
     let s = cat.space(space)?;
     main.fmt(format_args!("<main class=\"space\">\n"));
-    if s.islands.is_empty() {
-        main.raw("<p class=\"empty-space\">Nothing on this page yet. Add a <code>.firelight/</code> folder to a repo; the ⓘ menu has the prompt.</p>\n");
-    }
     for i in &s.islands {
         main.raw(&island_html(
             &cat,
@@ -549,40 +691,13 @@ pub fn space_page(
             fills.get(&i.r),
         ));
     }
-    let entries: Vec<_> = s
+    let entries: Vec<(Ref, &Entry)> = s
         .entries
         .iter()
-        .filter_map(|r| cat.entry(r).map(|e| (r, e)))
+        .filter_map(|r| cat.entry(r).map(|e| (r.clone(), e)))
         .collect();
-    if !entries.is_empty() {
-        main.raw("<section class=\"island entries\" aria-label=\"Guides and concepts\">\n<div class=\"entry-cols\">\n");
-        for (kind, heading) in [
-            (EntryKind::Guide, "Guides"),
-            (EntryKind::Concept, "Concepts"),
-        ] {
-            let mut list: Vec<_> = entries.iter().filter(|(_, e)| e.kind == kind).collect();
-            list.sort_by_cached_key(|(_, e)| e.title.to_lowercase());
-            if list.is_empty() {
-                continue;
-            }
-            main.fmt(format_args!(
-                "<div class=\"entry-col\">\n<h2>{heading}</h2>\n<ul class=\"entry-list\">\n"
-            ));
-            for (r, e) in &list {
-                main.fmt(format_args!(
-                    "<li><a href=\"/e/{}/{}?s={}\" title=\"{}\">{}</a></li>\n",
-                    attr(&r.repo),
-                    attr(&r.id),
-                    attr(space),
-                    attr(&e.summary),
-                    esc(&e.title)
-                ));
-            }
-            main.raw("</ul>\n");
-            main.raw("</div>\n");
-        }
-        main.raw("</div>\n</section>\n");
-    }
+    main.raw(&entry_columns(&entries, Some(space)));
+    main.raw(&repo_list(&cat, Some(&s.repos), Some(space)));
     main.raw("</main>");
     let title = s.title.clone();
     Some(layout_with_ids(
@@ -595,6 +710,10 @@ pub fn space_page(
         ids,
     ))
 }
+
+/// Lucide eye and eye-off (web/icons.txt has the licence).
+const EYE_SVG: &str = "<svg class=\"icon i-eye\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/></svg>";
+const EYE_OFF_SVG: &str = "<svg class=\"icon i-eye-off\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M10.73 5.08a10.74 10.74 0 0 1 11.2 6.57 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-1.44 2.49\"/><path d=\"M14.08 14.16a3 3 0 0 1-4.24-4.24\"/><path d=\"M17.48 17.5a10.75 10.75 0 0 1-15.42-5.15 1 1 0 0 1 0-.7 10.75 10.75 0 0 1 4.45-5.14\"/><path d=\"m2 2 20 20\"/></svg>";
 
 /// The theme button: one icon per state, picked by CSS from `html[data-theme]`
 /// (Lucide monitor, sun, moon; web/icons.txt has the licence).
@@ -617,7 +736,7 @@ fn kind_label(k: EntryKind) -> &'static str {
 pub fn space_index(ui: &Ui, content: &dyn Content) -> String {
     let cat = content.catalog();
     let mut m = H::new();
-    m.raw("<main class=\"space-index\">\n<ul class=\"space-cards\">\n");
+    m.raw("<main class=\"space-index\">\n<h2>Spaces</h2>\n<ul class=\"space-cards\">\n");
     for s in visible_spaces(&cat) {
         m.fmt(format_args!(
             "<li><a href=\"/s/{}\">{}<strong>{}</strong>",
@@ -630,8 +749,61 @@ pub fn space_index(ui: &Ui, content: &dyn Content) -> String {
         }
         m.raw("</a></li>\n");
     }
-    m.raw("<li class=\"all\"><a href=\"/s/all\"><strong>All</strong><span>Everything on one page</span></a></li>\n</ul>\n</main>");
+    m.raw("<li class=\"all\"><a href=\"/s/all\"><strong>All</strong><span>Everything on one page</span></a></li>\n</ul>\n");
+    let repos = repos_sorted(&cat);
+    if !repos.is_empty() {
+        m.raw("<h2>Repositories</h2>\n<ul class=\"space-cards repo-cards\">\n");
+        for r in repos {
+            m.fmt(format_args!(
+                "<li><a href=\"/r/{}\"><strong>{}</strong><span>{}</span></a></li>\n",
+                attr(&r.id),
+                esc(&r.name),
+                esc(&r.summary)
+            ));
+        }
+        m.raw("</ul>\n");
+    }
+    m.raw("</main>");
     layout(ui, &cat, content, None, "", &m.finish())
+}
+
+/// Breadcrumbs: each part but the last is a link.
+fn crumbs(parts: &[(String, Option<String>)]) -> String {
+    let mut h = H::new();
+    h.raw("<nav class=\"crumbs\" aria-label=\"Breadcrumb\"><ol>");
+    for (text, href) in parts {
+        match href {
+            Some(u) => h.fmt(format_args!(
+                "<li><a href=\"{}\">{}</a></li>",
+                attr(u),
+                esc(text)
+            )),
+            None => h.fmt(format_args!(
+                "<li><span aria-current=\"page\">{}</span></li>",
+                esc(text)
+            )),
+        };
+    }
+    h.raw("</ol></nav>\n");
+    h.finish()
+}
+
+/// The space a page belongs to: the one it was opened from, else `first`.
+fn page_space(
+    cat: &Catalog,
+    from: Option<&str>,
+    first: Option<&String>,
+) -> Option<(String, String)> {
+    let id = from
+        .filter(|s| *s == SPACE_ALL || cat.space(s).is_some())
+        .map(str::to_string)
+        .or_else(|| first.cloned())?;
+    let title = if id == SPACE_ALL {
+        "All".to_string()
+    } else {
+        cat.space(&id).map_or(id.clone(), |s| s.title.clone())
+    };
+    Some((id, title))
 }
 
 /// `/e/<repo>/<id>`.
@@ -655,23 +827,21 @@ pub fn entry_page(
     };
     let mut m = H::new();
     m.raw("<main class=\"entry\">\n");
-    if let Some(bs) = &back_space {
-        let t = if bs == SPACE_ALL {
-            "All".to_string()
-        } else {
-            cat.space(bs).map_or(bs.clone(), |s| s.title.clone())
-        };
-        m.fmt(format_args!(
-            "<p class=\"back\"><a href=\"/s/{}\">← {}</a></p>\n",
-            attr(bs),
-            esc(&t)
-        ));
+    let sp = page_space(&cat, back_space.as_deref(), None);
+    let q = sp
+        .as_ref()
+        .map(|(id, _)| format!("?s={id}"))
+        .unwrap_or_default();
+    let mut parts = Vec::new();
+    if let Some((id, title)) = &sp {
+        parts.push((title.clone(), Some(format!("/s/{id}"))));
     }
+    parts.push((repo.name.clone(), Some(format!("/r/{}{q}", repo.id))));
+    parts.push((e.title.clone(), None));
+    m.raw(&crumbs(&parts));
     m.fmt(format_args!(
-        "<p class=\"meta\"><span class=\"kind\">{}</span> · <a href=\"/r/{}\">{}</a>",
-        kind_label(e.kind),
-        attr(&repo.id),
-        esc(&repo.id)
+        "<p class=\"meta\"><span class=\"kind\">{}</span>",
+        kind_label(e.kind)
     ));
     let stale: Option<Staleness> = content.staleness(&repo.id, &e.path);
     if let Some(st) = &stale {
@@ -739,16 +909,28 @@ fn day(rfc3339: &str) -> String {
     rfc3339.chars().take(10).collect()
 }
 
-/// `/r/<repo>`: what a repo is and how it relates to others.
-pub fn repo_page(ui: &Ui, content: &dyn Content, id: &str) -> Option<String> {
+/// `/r/<repo>`: what a repo is, its links, its guides and concepts, and how
+/// it relates to others. `from_space`: `?s=`, for the breadcrumbs.
+pub fn repo_page(
+    ui: &Ui,
+    content: &dyn Content,
+    id: &str,
+    from_space: Option<&str>,
+) -> Option<String> {
     let cat = content.catalog();
     let repo = cat.repo(id)?;
-    let resolve = PageResolve {
-        cat: &cat,
-        space: None,
-    };
+    let sp = page_space(&cat, from_space, repo.default_spaces().first());
+    let space = sp.as_ref().map(|(s, _)| s.as_str());
+    let resolve = PageResolve { cat: &cat, space };
     let mut m = H::new();
-    m.fmt(format_args!("<main class=\"entry repo\">\n<p class=\"meta\"><span class=\"kind\">Repo</span></p>\n<h1>{}</h1>\n<p class=\"summary\">{}</p>\n", esc(&repo.name), esc(&repo.summary)));
+    m.raw("<main class=\"entry repo\">\n");
+    let mut parts = Vec::new();
+    if let Some((sid, title)) = &sp {
+        parts.push((title.clone(), Some(format!("/s/{sid}"))));
+    }
+    parts.push((repo.name.clone(), None));
+    m.raw(&crumbs(&parts));
+    m.fmt(format_args!("<p class=\"meta\"><span class=\"kind\">Repo</span></p>\n<h1>{}</h1>\n<p class=\"summary\">{}</p>\n", esc(&repo.name), esc(&repo.summary)));
     if let Some(o) = &repo.owner {
         m.fmt(format_args!("<p class=\"owner\">Owner: {}</p>\n", esc(o)));
     }
@@ -757,8 +939,53 @@ pub fn repo_page(ui: &Ui, content: &dyn Content, id: &str) -> Option<String> {
             .raw(&markdown::render(&a.source, &repo.id, &resolve))
             .raw("</div>\n");
     }
+    if !repo.links.is_empty() {
+        let mut links: Vec<PlacedLink> = repo
+            .links
+            .iter()
+            .map(|l| PlacedLink {
+                link: Ref {
+                    repo: repo.id.clone(),
+                    id: l.id.clone(),
+                },
+                label: l.label.clone(),
+                url: l.url.clone(),
+                note: l.note.clone(),
+                icon: l.icon.clone(),
+                entry: l
+                    .entry
+                    .as_ref()
+                    .map(|(r, _)| r.clone())
+                    .filter(|r| cat.entry(r).is_some()),
+                order: l.order,
+            })
+            .collect();
+        links.sort_by_cached_key(|l| l.label.to_lowercase());
+        let mut ids = BTreeSet::new();
+        m.raw("<section class=\"island links-island\"><h2>Links</h2>\n<ul class=\"links link-grid\">\n");
+        for l in &links {
+            m.raw("<li>")
+                .raw(&link_html(&cat, l, space, &mut ids))
+                .raw("</li>\n");
+        }
+        m.raw("</ul>\n</section>\n");
+    }
+    let entries: Vec<(Ref, &Entry)> = repo
+        .entries
+        .iter()
+        .map(|e| {
+            (
+                Ref {
+                    repo: repo.id.clone(),
+                    id: e.id.clone(),
+                },
+                e,
+            )
+        })
+        .collect();
+    m.raw(&entry_columns(&entries, space));
     if !repo.relations.is_empty() {
-        m.raw("<h2>Relations</h2>\n<ul class=\"relations\">\n");
+        m.raw("<section class=\"island\"><h2>Relations</h2>\n<ul class=\"relations\">\n");
         for rel in &repo.relations {
             let connected = cat.repo(&rel.repo).is_some();
             let target = if connected {
@@ -775,10 +1002,19 @@ pub fn repo_page(ui: &Ui, content: &dyn Content, id: &str) -> Option<String> {
                 esc(&rel.then)
             ));
         }
-        m.raw("</ul>\n");
+        m.raw("</ul>\n</section>\n");
     }
     m.raw("</main>");
-    Some(layout(ui, &cat, content, None, &repo.name, &m.finish()))
+    Some(shell(
+        ui,
+        &cat,
+        content,
+        space,
+        Some(&repo.id),
+        &repo.name,
+        &m.finish(),
+        BTreeSet::new(),
+    ))
 }
 
 /// The no-JS search results page.
@@ -797,10 +1033,12 @@ pub fn search_page(ui: &Ui, content: &dyn Content, space: &str, q: &str) -> Stri
         for hit in &hits {
             let url = hit_url(&cat, hit, space);
             m.fmt(format_args!(
-                "<li><span class=\"kind\">{}</span> <a href=\"{}\">{}</a> <span class=\"repo\">{}</span><p>{}</p></li>\n",
+                "<li><span class=\"kind\">{}</span> <a href=\"{}\">{}</a> <a class=\"repo\" href=\"/r/{}?s={}\">{}</a><p>{}</p></li>\n",
                 esc(&hit.kind.as_str().to_uppercase()),
                 attr(&url),
                 esc(&hit.title),
+                attr(&hit.r.repo),
+                attr(space),
                 esc(&hit.r.repo),
                 esc(&hit.summary)
             ));

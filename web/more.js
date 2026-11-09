@@ -1,7 +1,30 @@
 // The top link row stays on one line: what doesn't fit moves into "⋯" (More).
 // Without JS the row simply wraps.
 
+/** Escape and a click outside close a header menu (<details>). */
+export function menuClose(menu) {
+  const close = (focus) => {
+    if (!menu.open) return;
+    menu.open = false;
+    if (focus) menu.querySelector("summary")?.focus();
+  };
+  menu.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      close(true);
+    }
+  });
+  document.addEventListener("click", (e) => {
+    if (!menu.contains(e.target)) close(false);
+  });
+  menu.addEventListener("focusout", (e) => {
+    if (e.relatedTarget && !menu.contains(e.relatedTarget)) close(false);
+  });
+}
+
 export function initMore() {
+  const sw = document.querySelector(".bar .space-switch");
+  if (sw) menuClose(sw);
   const nav = document.querySelector(".bar .top-links");
   const row = nav?.querySelector("ul.row.top");
   const more = nav?.querySelector("details.more");
@@ -30,21 +53,5 @@ export function initMore() {
   // Hiding links in edit mode changes what fits.
   new MutationObserver(schedule).observe(document.body, { attributes: true, attributeFilter: ["class"] });
 
-  const close = (focus) => {
-    if (!more.open) return;
-    more.open = false;
-    if (focus) more.querySelector("summary")?.focus();
-  };
-  more.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") {
-      e.preventDefault();
-      close(true);
-    }
-  });
-  document.addEventListener("click", (e) => {
-    if (!more.contains(e.target)) close(false);
-  });
-  more.addEventListener("focusout", (e) => {
-    if (e.relatedTarget && !more.contains(e.relatedTarget)) close(false);
-  });
+  menuClose(more);
 }

@@ -1,6 +1,6 @@
 // Edit mode and hiding. Hidden refs persist per space in
 // localStorage["firelight:v1:hidden:<space>"] as a JSON array.
-import { byRef, h, load, openDialog, save, space } from "./util.js";
+import { byRef, eyeIcons, h, load, openDialog, save, space } from "./util.js";
 
 const KEY = "firelight:v1:hidden:" + space();
 let hidden = new Set();
@@ -50,6 +50,7 @@ export function apply() {
   for (const eye of document.querySelectorAll("[data-hide]")) {
     eye.setAttribute("aria-pressed", String(hidden.has(eye.dataset.hide)));
     eye.title = hidden.has(eye.dataset.hide) ? "Show again" : "Hide";
+    eye.setAttribute("aria-label", eye.title);
   }
   const count = document.querySelector(".hidden-count");
   if (count) {
@@ -77,10 +78,9 @@ function toggle(ref) {
 function addLinkEyes() {
   for (const a of document.querySelectorAll("a.link[data-ref]")) {
     const li = a.closest("li");
-    if (!li || li.querySelector(":scope > .eye")) continue;
-    li.append(
-      h("button", { type: "button", className: "eye", textContent: "\u{1F441}", dataset: { hide: a.dataset.ref }, "aria-pressed": "false" }),
-    );
+    const box = li?.querySelector(":scope > .acts") || li;
+    if (!box || box.querySelector(":scope > .eye")) continue;
+    box.append(h("button", { type: "button", className: "eye", dataset: { hide: a.dataset.ref }, "aria-pressed": "false", title: "Hide", "aria-label": "Hide" }, ...eyeIcons()));
   }
 }
 

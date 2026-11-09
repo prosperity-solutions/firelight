@@ -159,7 +159,7 @@ fn hostile_repo_text_is_escaped_everywhere() {
             None,
         )
         .unwrap_or_default(),
-        pages::repo_page(&ui, &c, "evil").unwrap_or_default(),
+        pages::repo_page(&ui, &c, "evil", None).unwrap_or_default(),
         pages::search_page(&ui, &c, "default", x),
     ];
     // The guide summary is a `title`, the link note a tooltip and part of the
@@ -446,7 +446,7 @@ fn entry_columns_list_everything_sorted() {
     ];
     for (i, t) in titles.iter().enumerate() {
         files.push(InputFile::regular(
-            &format!("guides/g{i:02}.md"),
+            format!("guides/g{i:02}.md"),
             format!("---\nformat: 1\ntitle: {t}\nsummary: Does {i}.\n---\nBody.\n").into_bytes(),
         ));
     }

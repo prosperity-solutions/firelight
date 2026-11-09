@@ -72,7 +72,16 @@ export function initPalette() {
     const li = h("li", { id: "palette-hit-" + n, role: "option", "aria-selected": "false" });
     li.append(h("span", { className: "kind", textContent: KINDS[hit.kind] || String(hit.kind || "") }));
     li.append(h("span", { className: "title", textContent: String(hit.title ?? hit.ref ?? "") }));
-    if (hit.repo) li.append(h("span", { className: "repo", textContent: String(hit.repo) }));
+    if (hit.repo) {
+      // A mouse shortcut to the repo page; the row itself opens the hit.
+      const repo = h("span", { className: "repo", textContent: String(hit.repo), title: "Open the repo page" });
+      repo.addEventListener("click", (e) => {
+        e.stopPropagation();
+        dialog.close();
+        location.href = `/r/${encodeURIComponent(String(hit.repo))}?s=${encodeURIComponent(space() || "all")}`;
+      });
+      li.append(repo);
+    }
     if (hit.kind === "link" && hit.show) {
       // Enter opens the link; this chip (and Shift+Enter) shows where it sits on
       // the page instead. A mouse shortcut, not a control, so the option holds

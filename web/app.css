@@ -110,7 +110,12 @@ a:not(.link):focus-visible { border-radius: 3px; }
 .space-list a:hover, .space-list a:focus-visible { background: var(--surface-2); }
 .space-list a[aria-current="page"] { font-weight: var(--fw-strong); }
 .space-list small { display: block; color: var(--note); font-size: var(--fs-sm); font-weight: var(--fw); }
-.space-list .all { border-top: 1px solid var(--line); margin-top: .3rem; padding-top: .3rem; }
+.space-list { max-height: 75vh; overflow: auto; }
+.space-list .group {
+  padding: .5rem .6rem .2rem; color: var(--note); font-size: var(--fs-xs);
+  text-transform: uppercase; letter-spacing: .08em;
+}
+.space-list .sep { border-top: 1px solid var(--line); margin: .3rem 0; }
 
 .search { position: relative; flex: 1 1 14rem; max-width: 30rem; margin-left: auto; }
 .search input {
@@ -188,7 +193,18 @@ a:not(.link):focus-visible { border-radius: 3px; }
   border-radius: 6px; color: var(--note); text-decoration: none;
 }
 .what:hover { color: var(--link); background: var(--surface-2); }
-.links > li > .what, .link-grid > li > .what, .more-list > li > .what { margin-left: auto; }
+/* The actions sit in fixed slots at the row's end, so rows line up:
+   [?] [docs] [eye]. In the top and footer rows they follow the label. */
+.acts { display: inline-flex; align-items: center; gap: .15rem; flex: none; margin-left: auto; }
+.acts > .tip, .acts > .what, .acts > .slot { width: 1.6rem; height: 1.6rem; flex: none; }
+.acts > .tip { width: 1.15rem; height: 1.15rem; margin: 0 .225rem; }
+.row .acts { margin-left: 0; }
+.row .slot { display: none; }
+.acts > .eye { width: 1.6rem; height: 1.6rem; }
+/* Rows in cards and grids: one hover band for the whole row. */
+.links > li, .link-grid > li { border-radius: 6px; padding-right: .15rem; }
+.links > li:hover, .link-grid > li:hover { background: var(--surface-2); }
+.links .link:hover, .link-grid .link:hover { background: none; }
 
 .glow { animation: glow 2s ease-out; border-radius: 6px; }
 @keyframes glow {
@@ -220,7 +236,7 @@ main { padding: 1.5rem 1rem 2.5rem; max-width: 80rem; margin: 0 auto; }
 }
 .links { display: flex; flex-direction: column; gap: 0; }
 .card .links { margin: 0 -.45rem; }
-.link-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(15rem, 100%), 1fr)); gap: .1rem 1.5rem; }
+.link-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(15rem, 100%), 1fr)); gap: .1rem 3rem; }
 .template-links.links { gap: .25rem .75rem; flex-direction: row; flex-wrap: wrap; }
 .empty { color: var(--note); margin: 0; }
 .help, .template-error { color: var(--note); font-size: var(--fs-sm); margin: .4rem 0; }
@@ -244,9 +260,13 @@ button[type="submit"]:hover, dialog button:hover, .copy-btn:hover, .show-me:hove
   line-height: 1; padding: 0; font-size: var(--fs-md);
 }
 .eye[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
-li > .eye { position: static; width: 1.6rem; height: 1.6rem; flex: none; font-size: var(--fs-xs); }
+.eye { place-items: center; color: var(--note); }
+.eye .icon { width: 1rem; height: 1rem; vertical-align: 0; }
+.eye .i-eye-off, .eye[aria-pressed="true"] .i-eye { display: none; }
+.eye[aria-pressed="true"] .i-eye-off { display: inline-block; }
+li > .eye, .acts > .eye { position: static; flex: none; width: 1.6rem; height: 1.6rem; }
 .island > .eye { top: 0; }
-body.editing .eye { display: inline-block; }
+body.editing .eye { display: inline-grid; }
 .is-hidden { display: none !important; }
 body.editing .is-hidden { display: revert !important; opacity: .45; outline: 1px dashed var(--note); }
 body.editing li.is-hidden { display: flex !important; }
@@ -363,8 +383,16 @@ pre.copy { position: relative; }
 }
 .prose pre code { background: none; padding: 0; }
 .prose blockquote { border-left: 4px solid var(--line); padding: 0 1rem; color: var(--note); }
-.prose table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
-.prose th, .prose td { border: 1px solid var(--line); padding: .35rem .7rem; text-align: left; }
+/* Tables scroll sideways in their own box, like a notebook; cells don't
+   break words. */
+.table-wrap { max-width: 100%; overflow-x: auto; margin: .8rem 0; overflow-wrap: normal; }
+.prose .table-wrap table { margin: 0; }
+.prose table { border-collapse: collapse; }
+.prose th, .prose td {
+  border: 1px solid var(--line); padding: .35rem .7rem; text-align: left; vertical-align: top;
+  min-width: 9rem; overflow-wrap: normal; word-break: normal;
+}
+.prose td code, .prose th code { white-space: nowrap; }
 .prose th { background: var(--surface-2); }
 .prose img { max-width: 100%; height: auto; }
 .prose hr { border: 0; border-top: 1px solid var(--line); margin: 1.5rem 0; }
@@ -394,3 +422,17 @@ pre.copy { position: relative; }
 }
 .entry-list a:hover { background: var(--surface-2); color: var(--link); }
 @media (max-width: 600px) { .entry-cols { grid-template-columns: minmax(0, 1fr); } }
+
+/* Breadcrumbs: Space › Repo › Entry. */
+.crumbs ol { display: flex; flex-wrap: wrap; gap: .2rem; color: var(--note); font-size: var(--fs-sm); margin: .3rem 0; }
+.crumbs li + li::before { content: "›"; margin-right: .3rem; }
+.crumbs a { color: inherit; }
+.repo-head { text-decoration: none; }
+.repo-head span { color: var(--note); }
+.repo-head:hover span { color: currentColor; }
+.space-index > h2 { font-size: var(--fs-lg); margin: .5rem 0 .9rem; }
+.space-index > h2 ~ h2 { margin-top: 2.5rem; }
+.repo-cards { grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: .75rem; }
+.repo-cards a { padding: .7rem .9rem; }
+.results .repo:hover { color: var(--link); text-decoration: underline; }
+.hits a.repo { color: var(--note); }
