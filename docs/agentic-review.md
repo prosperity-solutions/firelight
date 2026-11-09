@@ -131,7 +131,7 @@ re-derive repo context five times in parallel are how this gets expensive.
 Pin dependency source paths literally — in this repo that means the crate
 source under `~/.cargo/registry/src/*/<crate>-<version>/` at the version
 `Cargo.lock` resolves: `rmcp`, `axum`, `candle-*`, `rusqlite`,
-`rusqlite_migration`, `serde-saphyr`, `pulldown-cmark`, `gix` (or the git CLI's
+`serde-saphyr`, `pulldown-cmark`, `gix` (or the git CLI's
 own docs). "Verify against the real thing" only works if they know where the
 real thing is.
 
