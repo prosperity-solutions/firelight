@@ -11,7 +11,7 @@ publish.workspace = true
 [dependencies]
 firelight-format = { path = "../firelight-format" }
 firelight-store = { path = "../firelight-store" }
-base64 = "0.22"
+base64 = "0.23"
 hmac = "0.13"
 reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "json", "http2"] }
 ring = "0.17"
