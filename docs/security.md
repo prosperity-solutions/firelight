@@ -46,9 +46,6 @@ installs with auth `none`.
 - **`openai-compatible` sends chunk text out.** The key goes only over https
   or to a loopback host, redirects are never followed, responses are capped,
   and errors never contain the key or a response body.
-- **Known advisories:** candle 0.11.0 pulls `zip` 8.x, whose advisories are
-  about extracting archives. Firelight loads only `.safetensors` and never
-  opens a zip; `deny.toml` lists them until candle 0.11.1 passes the 7-day rule.
 
 ## The supply chain
 
