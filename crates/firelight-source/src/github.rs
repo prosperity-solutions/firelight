@@ -221,7 +221,7 @@ impl AppTokens {
 /// Verify GitHub's `X-Hub-Signature-256: sha256=<hex>` over the raw body,
 /// in constant time.
 pub fn verify_webhook(secret: &[u8], body: &[u8], header: Option<&str>) -> bool {
-    use hmac::{Hmac, Mac};
+    use hmac::{Hmac, KeyInit, Mac};
     let Some(hex) = header.and_then(|h| h.strip_prefix("sha256=")) else {
         return false;
     };

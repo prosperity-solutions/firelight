@@ -141,7 +141,7 @@ async fn tokens_are_found_by_owner_and_cached_until_five_minutes_before_expiry()
 
 #[test]
 fn webhook_signatures() {
-    use hmac::{Hmac, Mac};
+    use hmac::{Hmac, KeyInit, Mac};
     let secret = b"webhook-secret";
     let body = br#"{"ref":"refs/heads/main"}"#;
     let mut mac = Hmac::<sha2::Sha256>::new_from_slice(secret).unwrap_or_else(|e| panic!("{e}"));
