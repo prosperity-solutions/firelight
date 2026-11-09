@@ -625,6 +625,11 @@ impl Search {
             for r in res.iter().filter(|r| r.failed()) {
                 tracing::warn!(repo = %r.repo, "golden question fails: {}", golden::describe(r));
             }
+            // Every source is loaded here, so a skipped expect is a repo id
+            // that no source serves (a typo, or a source not configured).
+            for r in res.iter().filter(|r| !r.not_loaded.is_empty()) {
+                tracing::warn!(repo = %r.repo, "golden question expects a repo that isn't loaded: {}", golden::describe(r));
+            }
             res
         })
         .await
@@ -664,6 +669,21 @@ impl Search {
         let (state, results) = match res {
             Ok(None) => (Builtin::Skipped, Vec::new()),
             Ok(Some(r)) if r.iter().any(golden::Result::failed) => (Builtin::Fail, r),
+            // Skips never fail a check, but a built-in set that names only
+            // repos nobody serves tested nothing: the model is unchecked.
+            Ok(Some(r))
+                if !r.is_empty()
+                    && r.iter()
+                        .all(|x| x.outcome == Outcome::Skipped(golden::Skip::NotLoaded)) =>
+            {
+                let e = format!(
+                    "the golden file names only repos that aren't loaded ({}): the built-in check tested nothing",
+                    golden::not_loaded_repos(&r).join(", ")
+                );
+                tracing::error!("{e}");
+                self.set_problem(Some(e));
+                (Builtin::Fail, r)
+            }
             Ok(Some(r)) => (Builtin::Pass, r),
             Err(e) => {
                 tracing::error!(error = %e, "the built-in golden check couldn't run");
@@ -682,7 +702,7 @@ impl Search {
         }
         for r in results
             .iter()
-            .filter(|r| matches!(r.outcome, Outcome::Skipped))
+            .filter(|r| r.skipped() || !r.not_loaded.is_empty())
         {
             tracing::info!("built-in golden question skipped: {}", golden::describe(r));
         }
@@ -802,6 +822,13 @@ impl Search {
         {
             failures.push((r.repo.clone(), golden::describe(r)));
         }
+        let not_loaded: Vec<(String, String)> = s
+            .builtin_results
+            .iter()
+            .chain(&s.repo_results)
+            .filter(|r| !r.not_loaded.is_empty())
+            .map(|r| (r.repo.clone(), golden::describe(r)))
+            .collect();
         SearchInfo {
             backend: s.backend.clone(),
             model: s.model.clone(),
@@ -812,6 +839,7 @@ impl Search {
             problem: s.problem.clone(),
             builtin: s.builtin.as_str().to_string(),
             golden_failures: failures,
+            golden_not_loaded: not_loaded,
         }
     }
 }
@@ -956,6 +984,52 @@ mod tests {
                 .any(|(_, l)| l.contains("zebra")),
             "{info:?}"
         );
+    }
+
+    /// Expects in repos that aren't loaded are skipped; but a built-in set
+    /// that is only skips checked nothing, so it doesn't count as a pass.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn builtin_golden_with_only_unloaded_repos_fails() {
+        let s = search_with(None);
+        let mut docs = crate::hub::self_docs_files();
+        for f in &mut docs {
+            if f.path == "golden.yaml" {
+                *f = InputFile::regular(
+                    "golden.yaml",
+                    b"format: 1\nquestions:\n  - query: check a repo\n    expect: [infra-repo/request-access]\n".to_vec(),
+                );
+            }
+        }
+        assert_eq!(
+            s.run_builtin(Some(docs.clone()), None, Limits::default())
+                .await,
+            Builtin::Fail
+        );
+        let info = s.info();
+        assert!(
+            info.problem
+                .as_deref()
+                .is_some_and(|p| p.contains("infra-repo")),
+            "{info:?}"
+        );
+        assert_eq!(info.golden_not_loaded.len(), 1, "{info:?}");
+
+        // Mixed: judged on the loaded expect, the other one noted.
+        for f in &mut docs {
+            if f.path == "golden.yaml" {
+                *f = InputFile::regular(
+                    "golden.yaml",
+                    b"format: 1\nquestions:\n  - query: check a repo\n    expect: [check-a-repo, infra-repo/request-access]\n".to_vec(),
+                );
+            }
+        }
+        assert_eq!(
+            s.run_builtin(Some(docs), None, Limits::default()).await,
+            Builtin::Pass,
+            "{:?}",
+            s.info()
+        );
+        assert!(s.info().problem.is_none());
     }
 
     #[tokio::test(flavor = "multi_thread")]

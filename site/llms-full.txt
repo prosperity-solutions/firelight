@@ -287,6 +287,17 @@ questions:
 languages, paraphrases. A failing question is a warning on the hub, and makes
 `firelight preview --check` fail in the repo's own CI.
 
+An expect may point into another repo (`infra-repo/request-access`): that is
+how you test that a question asked about this repo finds the answer where it
+really lives. Such an expect only runs where that repo is loaded too. Where it
+isn't (this repo's own CI, by default), it is **skipped, not failed**, and
+reported as `repo infra-repo not loaded`; a question whose expects are all in
+other repos is skipped as a whole, and one with some expects here is judged on
+those. Skips never fail a check, so read them: an id you don't recognise is a
+typo. To run them in CI, load the other repos next to this one (`firelight
+preview --check . ../infra-repo`, or the Action's `also` input; see
+`firelight skills ci`).
+
 ## `spaces.yaml`
 
 ```yaml
@@ -382,6 +393,10 @@ All three want the same thing: the right answer, fast, and true.
 - The questions people really type, with the entries that must answer them.
   Add `needs: meaning` for questions only meaning search can answer (other
   languages, paraphrases). `firelight preview --check` runs them.
+- Expect entries in other repos (`infra-repo/x`) where the answer really
+  lives: it tests that the hub finds it. Alone they are skipped (`repo
+  infra-repo not loaded`); run them with the other repos loaded too
+  (`firelight preview --check . ../infra-repo`).
 
 ## Always
 
@@ -456,11 +471,42 @@ The action checks the downloaded binary against the release's `SHA256SUMS`
 and its GitHub attestation before running it. Every step writes its output
 into the job summary.
 
+## Golden questions that expect another repo's entries
+
+A golden question may expect an entry in another repo
+(`expect: [infra-repo/request-access]`). In this repo's CI only this repo is
+loaded, so such expects are **skipped, not failed**, and listed as
+`repo infra-repo not loaded`. To run them, check the other repos out next to
+this one and list their folders in `also` (one per line):
+
+```yaml
+      - uses: actions/checkout@<sha> # vX
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@<sha> # vX
+        with:
+          repository: acme/infra-repo
+          path: .siblings/infra-repo
+          persist-credentials: false
+          # token: ${{ secrets.INFRA_REPO_READ_TOKEN }}   # for a private repo: read-only, that repo only
+      - uses: prosperity-solutions/firelight/action@<sha> # vX.Y.Z
+        with:
+          version: vX.Y.Z
+          also: |
+            .siblings/infra-repo
+```
+
+`also` feeds `firelight preview --check` only; `firelight check` and `covers`
+still look at this repo alone. An error in a sibling's `.firelight/` fails the
+check too, so pin the sibling with `ref:` if its main branch moves under you.
+
 Locally, the same three commands:
 
 ```sh
 firelight check .
 firelight preview --check .            # --embedder off for speed
+firelight preview --check . ../infra-repo   # with another repo, for cross-repo golden questions
 firelight covers --base origin/main .
 ```
 

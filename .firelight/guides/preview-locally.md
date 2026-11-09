@@ -10,3 +10,5 @@ related: [check-a-repo]
 2. Open the URL it prints; it reloads when files change.
 3. `firelight preview --check .` builds everything once and runs the golden
    questions, for scripts and CI.
+4. Golden questions that expect another repo's entries are skipped unless that
+   repo is loaded too: `firelight preview --check . ../infra-repo`.

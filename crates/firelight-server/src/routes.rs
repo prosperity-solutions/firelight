@@ -410,6 +410,14 @@ async fn status(State(state): State<AppState>) -> Response {
             }
             m.raw("</ul>\n");
         }
+        let skipped = st["golden"]["not_loaded"].as_array().cloned().unwrap_or_default();
+        if !skipped.is_empty() {
+            m.raw("<h3>Golden expects in repos that aren't loaded (skipped)</h3><ul>\n");
+            for f in &skipped {
+                m.fmt(format_args!("<li><code>{}</code>: {}</li>\n", esc(&s(&f["repo"])), esc(&s(&f["question"]))));
+            }
+            m.raw("</ul>\n");
+        }
         if st["database"].is_object() {
             m.fmt(format_args!(
                 "<h2>Database</h2>\n<p>{} bytes, schema version {}</p>\n",

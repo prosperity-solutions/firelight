@@ -175,6 +175,7 @@ impl Hub {
             "golden": {
                 "builtin": info.builtin,
                 "failures": info.golden_failures.iter().map(|(r, l)| json!({ "repo": r, "question": l })).collect::<Vec<_>>(),
+                "not_loaded": info.golden_not_loaded.iter().map(|(r, l)| json!({ "repo": r, "question": l })).collect::<Vec<_>>(),
             },
             "database": { "size_bytes": db_size, "schema_version": db_version },
         });

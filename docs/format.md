@@ -278,6 +278,17 @@ questions:
 languages, paraphrases. A failing question is a warning on the hub, and makes
 `firelight preview --check` fail in the repo's own CI.
 
+An expect may point into another repo (`infra-repo/request-access`): that is
+how you test that a question asked about this repo finds the answer where it
+really lives. Such an expect only runs where that repo is loaded too. Where it
+isn't (this repo's own CI, by default), it is **skipped, not failed**, and
+reported as `repo infra-repo not loaded`; a question whose expects are all in
+other repos is skipped as a whole, and one with some expects here is judged on
+those. Skips never fail a check, so read them: an id you don't recognise is a
+typo. To run them in CI, load the other repos next to this one (`firelight
+preview --check . ../infra-repo`, or the Action's `also` input; see
+`firelight skills ci`).
+
 ## `spaces.yaml`
 
 ```yaml
