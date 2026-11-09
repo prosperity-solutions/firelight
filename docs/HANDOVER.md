@@ -1,7 +1,7 @@
 # Firelight — the docs your repos write about themselves
 
 > Handover spec **v1** (2026-11-05), reviewed twice at the architecture checkpoint. It becomes `docs/HANDOVER.md` in `prosperity-solutions/firelight`.
-> Verified so far: candle-transformers 0.11.1 ships `qwen3`, `xlm_roberta` and `modernbert`; `rmcp` 3.8.0 is the official Rust MCP SDK; `rusqlite` 0.41.1 and `rusqlite_migration` 2.6.0 are current (M3: `rusqlite_migration` 2.6.0 requires `rusqlite` ^0.40, so Firelight uses 0.40.2). Model sizes and licences were read from the Hugging Face API. Everything else marked **D#** is verified during the run (§26).
+> Verified so far: candle-transformers 0.11.1 ships `qwen3`, `xlm_roberta` and `modernbert`; `rmcp` 3.8.0 is the official Rust MCP SDK; `rusqlite` 0.41.1 and `rusqlite_migration` 2.6.0 are current (M3: `rusqlite_migration` 2.6.0 requires `rusqlite` ^0.40, so Firelight used 0.40.2; on 2026-11-09 RUSTSEC-2026-0459 required `rusqlite` 0.41, so Firelight runs its migrations itself and dropped `rusqlite_migration`). Model sizes and licences were read from the Hugging Face API. Everything else marked **D#** is verified during the run (§26).
 
 ---
 
@@ -126,7 +126,7 @@ Edition 2024, one Cargo workspace, `publish = false` everywhere.
 crates/
   firelight-format/   types, YAML/markdown parsing, validation, ref resolution. No I/O, no async.
   firelight-source/   dir, git and GitHub sources; GitHub App tokens; polling; webhook verify.
-  firelight-store/    rusqlite + rusqlite_migration; every SQL statement lives here.
+  firelight-store/    rusqlite; every SQL statement lives here.
   firelight-embed/    Embedder trait; candle backends; openai-compatible client; model download.
   firelight-search/   chunker, FTS5 query building, vector scan, fusion, golden runner.
   firelight-server/   axum routes, HTML rendering, MCP (rmcp), auth, OTEL wiring.
@@ -351,7 +351,7 @@ One file (`<data>/firelight.db`, WAL mode). It holds the catalog per source and 
 Embeddings are stored as little-endian `f32` blobs, keyed by `(model, revision, dims, chunk_hash)`. A changed chunk or a changed model re-embeds only what's missing. At startup all vectors for the active model load into memory. Search is an exact cosine scan: a few thousand vectors take about a millisecond, so there is no vector extension.
 
 ### 7.2 Migrations
-- `rusqlite_migration`, forward-only SQL files under `crates/firelight-store/migrations/`, embedded and run at startup inside a transaction. Version lives in `PRAGMA user_version`.
+- Forward-only SQL files under `crates/firelight-store/migrations/`, embedded and run at startup inside a transaction. Version lives in `PRAGMA user_version`.
 - A migration that fails → refuse to start, with the error.
 - A database **newer** than the binary (after a rollback) → log a warning, delete the file, rebuild from git. Allowed because it is a cache.
 - Migrations must keep the embeddings table, so upgrades don't re-embed.

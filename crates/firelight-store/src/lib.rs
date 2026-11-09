@@ -13,7 +13,6 @@ use std::path::{Path, PathBuf};
 use firelight_format::InputFile;
 use firelight_format::repo::FileKind;
 use rusqlite::{Connection, OptionalExtension, params};
-use rusqlite_migration::{M, Migrations};
 
 /// The migrations, in order. Append only.
 const MIGRATIONS: &[&str] = &[
@@ -24,8 +23,21 @@ const MIGRATIONS: &[&str] = &[
 pub mod fts;
 pub use fts::FtsIndex;
 
-fn migrations() -> Migrations<'static> {
-    Migrations::new(MIGRATIONS.iter().map(|s| M::up(s)).collect())
+/// Run the pending migrations up to `target` in one transaction, each followed
+/// by its `user_version` bump. Already applied ones are skipped.
+fn migrate_to(conn: &mut Connection, target: usize) -> rusqlite::Result<()> {
+    let tx = conn.transaction()?;
+    let current: i64 = tx.pragma_query_value(None, "user_version", |r| r.get(0))?;
+    let current = usize::try_from(current).unwrap_or(0);
+    for (i, sql) in MIGRATIONS.iter().enumerate().take(target).skip(current) {
+        tx.execute_batch(sql)?;
+        tx.pragma_update(
+            None,
+            "user_version",
+            i64::try_from(i + 1).unwrap_or(i64::MAX),
+        )?;
+    }
+    tx.commit()
 }
 
 /// The schema version this binary writes.
@@ -45,7 +57,7 @@ pub enum StoreError {
     )]
     Migration {
         path: String,
-        source: rusqlite_migration::Error,
+        source: rusqlite::Error,
     },
     #[error("database {path}: {source}")]
     Io {
@@ -198,8 +210,7 @@ impl Store {
 
     fn migrate(&mut self) -> Result<()> {
         let path = self.shown();
-        migrations()
-            .to_latest(&mut self.conn)
+        migrate_to(&mut self.conn, latest_version())
             .map_err(|source| StoreError::Migration { path, source })
     }
 

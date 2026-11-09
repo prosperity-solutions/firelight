@@ -170,9 +170,7 @@ fn every_migration_step_reaches_the_same_database() {
         );
     }
     let mut fresh = Connection::open_in_memory().unwrap_or_else(|e| panic!("{e}"));
-    migrations()
-        .to_latest(&mut fresh)
-        .unwrap_or_else(|e| panic!("{e}"));
+    migrate_to(&mut fresh, latest).unwrap_or_else(|e| panic!("{e}"));
     for n in 1..=latest {
         fresh
             .execute_batch(&seeds(n).unwrap_or_default())
@@ -181,13 +179,12 @@ fn every_migration_step_reaches_the_same_database() {
     let want = dump(&fresh);
     for start in 1..=latest {
         let mut c = Connection::open_in_memory().unwrap_or_else(|e| panic!("{e}"));
-        let m = migrations();
         for n in 1..=start {
-            m.to_version(&mut c, n).unwrap_or_else(|e| panic!("{e}"));
+            migrate_to(&mut c, n).unwrap_or_else(|e| panic!("{e}"));
             c.execute_batch(&seeds(n).unwrap_or_default())
                 .unwrap_or_else(|e| panic!("seed {n}: {e}"));
         }
-        m.to_latest(&mut c).unwrap_or_else(|e| panic!("{e}"));
+        migrate_to(&mut c, latest).unwrap_or_else(|e| panic!("{e}"));
         for n in start + 1..=latest {
             c.execute_batch(&seeds(n).unwrap_or_default())
                 .unwrap_or_else(|e| panic!("seed {n}: {e}"));
@@ -201,8 +198,29 @@ fn every_migration_step_reaches_the_same_database() {
 }
 
 #[test]
-fn migrations_validate() {
-    assert!(migrations().validate().is_ok());
+fn migrations_run_once_and_set_the_version() {
+    let mut c = Connection::open_in_memory().unwrap_or_else(|e| panic!("{e}"));
+    for _ in 0..2 {
+        migrate_to(&mut c, latest_version()).unwrap_or_else(|e| panic!("{e}"));
+        let v: i64 = c
+            .pragma_query_value(None, "user_version", |r| r.get(0))
+            .unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(usize::try_from(v).ok(), Some(latest_version()));
+    }
+}
+
+#[test]
+fn a_failing_migration_rolls_back_and_keeps_the_version() {
+    let mut c = Connection::open_in_memory().unwrap_or_else(|e| panic!("{e}"));
+    migrate_to(&mut c, 1).unwrap_or_else(|e| panic!("{e}"));
+    // Make migration 002 fail half-way: a table it creates already exists.
+    c.execute_batch("CREATE TABLE embeddings (x)")
+        .unwrap_or_else(|e| panic!("{e}"));
+    assert!(migrate_to(&mut c, latest_version()).is_err());
+    let v: i64 = c
+        .pragma_query_value(None, "user_version", |r| r.get(0))
+        .unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(v, 1);
 }
 
 #[test]
