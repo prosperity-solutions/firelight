@@ -1,5 +1,6 @@
 ---
 source: crates/firelight-server/tests/pages.rs
+assertion_line: 61
 expression: "pages::space_page(&ui, c.as_ref(), \"platform\",\n&BTreeMap::new()).unwrap_or_default()"
 ---
 <!doctype html>
@@ -178,11 +179,12 @@ expression: "pages::space_page(&ui, c.as_ref(), \"platform\",\n&BTreeMap::new())
    - `links.yaml`: the links the team actually uses (environments, consoles, dashboards), placed on existing islands where they fit.
    - 3 to 10 `concepts/`: what each important thing is, and what it is not.
    - `guides/` for the tasks people ask about, step by step.
+   - `covers` on every concept and guide that describes code or config (`deploy/**`, `terraform/access/**`). It is how the docs stay true: a PR that changes those paths fails until the entry is updated, or a commit says it is still correct with the trailer `Firelight-Covers: checked &lt;repo&gt;/&lt;entry&gt;`. Check with `firelight covers --report`: the top-level paths no entry covers yet.
    - `golden.yaml`: questions people would type, with the entries that must answer them.
    Keep entries short, one idea each. Write only what you verified in this repository. Leave out anything secret or internal-only: no tokens, no internal hostnames you were not asked to publish, no personal data.
 5. Run `firelight check` and `firelight preview --check` until both pass.
 6. Wire this repo&#39;s agents to Firelight. Add to AGENTS.md (and CLAUDE.md, if the repo has one) under a &quot;Firelight&quot; heading:
-   &quot;The Firelight MCP server is the team&#39;s shared knowledge of all our repos; it must be connected. Search it first (`search`) for any discovery question: environments, access, deploys, incidents, links, how-tos, cross-repo rules. Keep `.firelight/` true in the same PR as the change; run `firelight check` and `firelight preview --check`. When a Firelight answer is stale or missing, fix it in the owning repo&#39;s `.firelight/`, in any repo.&quot;
+   &quot;The Firelight MCP server is the team&#39;s shared knowledge of all our repos; it must be connected. Search it first (`search`) for any discovery question: environments, access, deploys, incidents, links, how-tos, cross-repo rules. Keep `.firelight/` true in the same PR as the change; run `firelight check` and `firelight preview --check`. When `firelight covers` flags an entry, update it, or if it is still correct add the trailer `Firelight-Covers: checked &lt;repo&gt;/&lt;entry&gt;` to a commit message. When a Firelight answer is stale or missing, fix it in the owning repo&#39;s `.firelight/`, in any repo.&quot;
    Commit the skill (`firelight skills install --project`), and say in the README how to connect the MCP, e.g. for Claude Code: `claude mcp add --transport http firelight https://firelight.acme.example/mcp --header &quot;Authorization: Bearer &lt;token&gt;&quot;`.
 7. Add the Firelight GitHub Action to CI (see `firelight skills ci`).
 8. Open a pull request with all of it.</code></pre>

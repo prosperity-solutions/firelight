@@ -11,6 +11,13 @@
 # and, on pull requests, `firelight covers`. Each step's output goes into the
 # job summary.
 #
+# `covers` is strict by default: a PR that changes paths an entry `covers`
+# fails until the entry is updated, or someone says it is still correct with a
+# commit trailer `Firelight-Covers: checked <repo>/<entry>` (`checked` alone
+# for every flagged entry) or the `firelight-covers-checked` label. For the
+# label to re-run the check, trigger on `pull_request` types `labeled` and
+# `unlabeled` too. `strict-covers: false` turns failures back into warnings.
+#
 # Golden questions that expect entries in other repos are skipped unless those
 # repos are loaded too: check them out next to this one (actions/checkout with
 # `repository` and `path`, plus a token for private ones) and list their
@@ -36,8 +43,8 @@ inputs:
     description: "`off` (default, fast) or `candle` to run golden questions with meaning search (the model is cached)."
     default: "off"
   strict-covers:
-    description: "`true` fails the job when a covered path changed without its entry."
-    default: "false"
+    description: "`true` (default) fails the job while a covered path changed and its entry was neither updated nor acknowledged (`Firelight-Covers: checked` trailer or the `firelight-covers-checked` label). `false` only warns."
+    default: "true"
   binary:
     description: For Firelight's own CI only - a firelight binary to use instead of a release.
     default: ""
@@ -99,17 +106,19 @@ runs:
         DIR: ${{ inputs.directory }}
         BASE_REF: ${{ github.base_ref }}
         STRICT: ${{ inputs.strict-covers }}
+        LABELED: ${{ contains(github.event.pull_request.labels.*.name, 'firelight-covers-checked') }}
       run: |
         set -o pipefail
         git -C "$DIR" fetch --quiet --no-tags origin "$BASE_REF" || true
-        flag=""
-        if [ "$STRICT" = "true" ]; then flag="--strict"; fi
+        flags=()
+        if [ "$STRICT" != "false" ]; then flags+=(--strict); fi
+        if [ "$LABELED" = "true" ]; then flags+=(--label-checked); fi
         { echo '### firelight covers'; echo '~~~~~~~~~~'; } >> "$GITHUB_STEP_SUMMARY"
         status=0
-        "$RUNNER_TEMP/firelight-bin/firelight" covers --base "origin/$BASE_REF" $flag "$DIR" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || status=$?
+        "$RUNNER_TEMP/firelight-bin/firelight" covers --base "origin/$BASE_REF" "${flags[@]}" -- "$DIR" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || status=$?
         echo '~~~~~~~~~~' >> "$GITHUB_STEP_SUMMARY"
         # 2 = covers couldn't tell (e.g. a shallow clone): a warning by default.
-        if [ "$status" = 2 ] && [ "$STRICT" != "true" ]; then
+        if [ "$status" = 2 ] && [ "$STRICT" = "false" ]; then
           echo "::warning::firelight covers couldn't compare with the base; check out with fetch-depth: 0"
           exit 0
         fi

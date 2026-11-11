@@ -121,7 +121,7 @@ It never grants rights to other people. See [the access model](entry:access-mode
 | `tags` | | Free words. |
 | `links` | | Refs to links. |
 | `related` | | Refs to entries. |
-| `covers` | | Repo-relative paths or globs (`terraform/access/**`), no `..`, no leading `/`. When those paths change in git after the entry last did, the entry is marked *maybe stale*. |
+| `covers` | | Repo-relative paths or globs (`terraform/access/**`), no `..`, no leading `/`. When those paths change in git after the entry last did, the entry is marked *maybe stale*, and `firelight covers` fails the PR until the entry is updated or a commit trailer `Firelight-Covers: checked <repo>/<entry>` says it is still correct (`firelight skills ci`). Set it on every entry that describes code or config. |
 | `spaces` | | Space ids; default: the repo's spaces. |
 
 The front matter sits between two `---` lines at the very top of the file.
@@ -364,8 +364,11 @@ All three want the same thing: the right answer, fast, and true.
 - Title: the name people use. `aliases`: the other names, abbreviations and
   the words in other languages people type.
 - `summary`: one sentence a stranger understands. It is what search shows.
-- `covers`: the paths this concept describes (`terraform/access/**`). When
-  they change without the entry, `firelight covers` flags it in the PR.
+- `covers`: the paths this concept describes (`terraform/access/**`). Set it
+  on **every** entry that describes code or config: it is how docs stay true.
+  When those paths change without the entry, `firelight covers` fails the PR
+  until the entry is updated or a commit says
+  `Firelight-Covers: checked <repo>/<entry>` (see `firelight skills ci`).
 - 3 to 10 concepts per repo is plenty. Link related ones with `related`.
 
 ## Guides (`guides/*.md`)
@@ -373,6 +376,8 @@ All three want the same thing: the right answer, fast, and true.
 - The tasks people ask about, as steps: "Request access rights", "Deploy a
   hotfix". Title them as the task.
 - Start with when to use it, then numbered steps, then what it does not do.
+- `covers`: the code and config the steps depend on (`deploy/**`,
+  `Dockerfile`), like concepts.
 - Link the tools with `[the portal](link:access-portal)` and other entries
   with `[the model](entry:access-model)`, so links stay right when URLs move.
 
@@ -422,11 +427,12 @@ Set this repository up for Firelight, the docs your repos write about themselves
    - `links.yaml`: the links the team actually uses (environments, consoles, dashboards), placed on existing islands where they fit.
    - 3 to 10 `concepts/`: what each important thing is, and what it is not.
    - `guides/` for the tasks people ask about, step by step.
+   - `covers` on every concept and guide that describes code or config (`deploy/**`, `terraform/access/**`). It is how the docs stay true: a PR that changes those paths fails until the entry is updated, or a commit says it is still correct with the trailer `Firelight-Covers: checked <repo>/<entry>`. Check with `firelight covers --report`: the top-level paths no entry covers yet.
    - `golden.yaml`: questions people would type, with the entries that must answer them.
    Keep entries short, one idea each. Write only what you verified in this repository. Leave out anything secret or internal-only: no tokens, no internal hostnames you were not asked to publish, no personal data.
 5. Run `firelight check` and `firelight preview --check` until both pass.
 6. Wire this repo's agents to Firelight. Add to AGENTS.md (and CLAUDE.md, if the repo has one) under a "Firelight" heading:
-   "The Firelight MCP server is the team's shared knowledge of all our repos; it must be connected. Search it first (`search`) for any discovery question: environments, access, deploys, incidents, links, how-tos, cross-repo rules. Keep `.firelight/` true in the same PR as the change; run `firelight check` and `firelight preview --check`. When a Firelight answer is stale or missing, fix it in the owning repo's `.firelight/`, in any repo."
+   "The Firelight MCP server is the team's shared knowledge of all our repos; it must be connected. Search it first (`search`) for any discovery question: environments, access, deploys, incidents, links, how-tos, cross-repo rules. Keep `.firelight/` true in the same PR as the change; run `firelight check` and `firelight preview --check`. When `firelight covers` flags an entry, update it, or if it is still correct add the trailer `Firelight-Covers: checked <repo>/<entry>` to a commit message. When a Firelight answer is stale or missing, fix it in the owning repo's `.firelight/`, in any repo."
    Commit the skill (`firelight skills install --project`), and say in the README how to connect the MCP, e.g. for Claude Code: `claude mcp add --transport http firelight https://firelight.acme.example/mcp --header "Authorization: Bearer <token>"`.
 7. Add the Firelight GitHub Action to CI (see `firelight skills ci`).
 8. Open a pull request with all of it.
@@ -445,11 +451,15 @@ Action runs three checks:
 2. `firelight preview --check`: builds everything the server would, runs the
    repo's golden questions, and fails when one doesn't find its entry.
 3. `firelight covers` (pull requests only): entries whose `covers` paths
-   changed while the entry didn't. A warning unless `strict-covers: true`.
+   changed while the entry didn't. **Strict by default:** the PR fails until
+   each flagged entry is updated or acknowledged (below).
 
 ```yaml
 name: firelight
-on: [pull_request]
+on:
+  pull_request:
+    # labeled/unlabeled: re-run when someone adds the firelight-covers-checked label
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 permissions:
   contents: read
 jobs:
@@ -464,8 +474,45 @@ jobs:
         with:
           version: vX.Y.Z
           # embedder: candle      # run golden questions with meaning search
-          # strict-covers: "true"
+          # strict-covers: "false"   # only warn about maybe-stale entries
 ```
+
+## When `covers` fires
+
+`covers` is how a repo's docs stay true: a change to code an entry
+describes can't merge until someone has looked at the entry. For each
+flagged entry the check prints its ref, its file, the changed paths that
+triggered it, and the next step (`--json` has the same fields):
+
+```text
+error: app-repo/deploy-an-app may be stale
+  entry:   .firelight/guides/deploy-an-app.md
+  changed: deploy/values.yaml
+  next:    update .firelight/guides/deploy-an-app.md so it matches the change; ...
+```
+
+Then do one of two things:
+
+- **The entry is now wrong or incomplete:** update it in this PR.
+- **It is still correct** (a version bump, a refactor): say so in a commit
+  message in this PR, as a trailer (a line in the last paragraph):
+
+  ```text
+  Bump the chart
+
+  Firelight-Covers: checked app-repo/deploy-an-app
+  ```
+
+  Name several refs separated by spaces, or bare entry ids of this repo.
+  `Firelight-Covers: checked` alone acknowledges every flagged entry. A
+  maintainer can instead add the PR label `firelight-covers-checked`, which
+  acknowledges every flagged entry. The job summary lists what was
+  acknowledged and by which commit (or the label). A ref that names no
+  entry of this repo is ignored with a warning.
+
+Two warnings never fail the job: a changed file that no entry covers, inside
+a folder that other entries do cover (a gap), and an ignored trailer.
+`firelight covers --report` shows which top-level paths no entry covers yet.
 
 Pin the action by commit (Dependabot updates the commit) and set `version`
 to a release; bump `version` yourself when you upgrade.
@@ -509,7 +556,8 @@ Locally, the same three commands:
 firelight check .
 firelight preview --check .            # --embedder off for speed
 firelight preview --check . ../infra-repo   # with another repo, for cross-repo golden questions
-firelight covers --base origin/main .
+firelight covers --base origin/main .   # add --strict to fail like CI
+firelight covers --report .             # paths no entry covers yet
 ```
 
 

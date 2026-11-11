@@ -20,3 +20,5 @@ questions:
     needs: meaning
   - query: run firelight with docker compose and tls
     expect: [self-hosting]
+  - query: the covers check fails but the docs are still correct
+    expect: [covers]

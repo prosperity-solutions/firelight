@@ -30,7 +30,10 @@ connected.
 - Keep `.firelight/` true in the same PR as the change it describes.
 - Before pushing, run `firelight check` and `firelight preview --check`
   (add `--embedder off` for speed). In a PR, `firelight covers --base origin/main`
-  lists entries whose covered code changed without them.
+  lists entries whose covered code changed without them. CI fails on those
+  until you update each one, or, if it is still correct, add the trailer
+  `Firelight-Covers: checked <repo>/<entry>` to a commit message.
+- Set `covers` on every entry that describes code or config.
 - With the Firelight MCP server connected: `search` first; if the hits look
   thin, `list_entries` and `get_entry`. Call `list_spaces` and `list_repos`
   before declaring a new space or relation.
