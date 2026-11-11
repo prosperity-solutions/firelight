@@ -112,7 +112,7 @@ It never grants rights to other people. See [the access model](entry:access-mode
 | `tags` | | Free words. |
 | `links` | | Refs to links. |
 | `related` | | Refs to entries. |
-| `covers` | | Repo-relative paths or globs (`terraform/access/**`), no `..`, no leading `/`. When those paths change in git after the entry last did, the entry is marked *maybe stale*. |
+| `covers` | | Repo-relative paths or globs (`terraform/access/**`), no `..`, no leading `/`. When those paths change in git after the entry last did, the entry is marked *maybe stale*, and `firelight covers` fails the PR until the entry is updated or a commit trailer `Firelight-Covers: checked <repo>/<entry>` says it is still correct (`firelight skills ci`). Set it on every entry that describes code or config. |
 | `spaces` | | Space ids; default: the repo's spaces. |
 
 The front matter sits between two `---` lines at the very top of the file.

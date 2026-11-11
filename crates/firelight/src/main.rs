@@ -87,15 +87,23 @@ enum Command {
         project: bool,
     },
     /// In a PR: entries whose `covers` paths changed while the entry didn't.
+    /// Acknowledge one that is still correct with a commit trailer
+    /// `Firelight-Covers: checked <repo>/<entry>` (or `checked` alone for all).
     Covers {
         /// The PR's base ref (e.g. origin/main).
-        #[arg(long)]
-        base: String,
+        #[arg(long, required_unless_present = "report")]
+        base: Option<String>,
         /// The repo (default: the current folder).
         dir: Option<std::path::PathBuf>,
-        /// Fail (exit 1) instead of warning.
+        /// Fail (exit 1) while a flagged entry is neither updated nor acknowledged.
         #[arg(long)]
         strict: bool,
+        /// The PR carries the `firelight-covers-checked` label: every flagged entry counts as checked.
+        #[arg(long)]
+        label_checked: bool,
+        /// Instead: which top-level paths no entry covers (no --base needed).
+        #[arg(long, conflicts_with_all = ["base", "strict", "label_checked"])]
+        report: bool,
         /// Print JSON.
         #[arg(long)]
         json: bool,
@@ -223,12 +231,16 @@ fn main() -> ExitCode {
             base,
             dir,
             strict,
+            label_checked,
+            report,
             json,
         } => covers::run(covers::Args {
             base,
             dir,
             strict,
             json,
+            report,
+            label_checked,
         }),
         Command::Schema { out } => {
             let all = firelight_format::schema::all();

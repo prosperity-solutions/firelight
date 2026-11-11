@@ -584,25 +584,43 @@ jobs:
           echo 'b' > "$r/terraform/access/main.tf"
           git -C "$r" commit -qam "a covered path changes"
           echo "FIXTURE=$r" >> "$GITHUB_ENV"
-      - name: Run the action
+      - name: Run the action (strict covers by default, so it fails on a PR)
+        id: strict
         # The action at this very commit, on purpose (§12.3).
         uses: ./action # zizmor: ignore[self-repository]
+        continue-on-error: true
         with:
           version: v0.0.0
           binary: target/debug/firelight
           directory: ${{ env.FIXTURE }}
       - name: covers reported the stale entries
-        if: github.event_name == 'pull_request'
         env:
-          BASE: ${{ github.base_ref }}
+          BASE: ${{ github.base_ref || 'main' }}
+          OUTCOME: ${{ steps.strict.outcome }}
+          EVENT: ${{ github.event_name }}
         run: |
           set -eu
-          out=$(target/debug/firelight covers --base "origin/$BASE" "$FIXTURE")
+          if [ "$EVENT" = pull_request ]; then want=failure; else want=success; fi
+          if [ "$OUTCOME" != "$want" ]; then echo "the action's outcome was $OUTCOME, wanted $want"; exit 1; fi
+          if [ "$EVENT" = pull_request ]; then base="origin/$BASE"; else base="$BASE"; fi
+          out=$(target/debug/firelight covers --base "$base" "$FIXTURE")
           echo "$out"
-          echo "$out" | grep -q 'request-access.md may be stale'
-          if target/debug/firelight covers --strict --base "origin/$BASE" "$FIXTURE"; then
+          echo "$out" | grep -q 'acme-infra/request-access may be stale'
+          echo "$out" | grep -q 'next:    update .firelight/guides/request-access.md'
+          if target/debug/firelight covers --strict --base "$base" "$FIXTURE"; then
             echo "--strict should fail"; exit 1
           fi
+          # Still correct: acknowledge every flagged entry with a trailer.
+          export GIT_AUTHOR_NAME=ci GIT_AUTHOR_EMAIL=ci@acme.example GIT_COMMITTER_NAME=ci GIT_COMMITTER_EMAIL=ci@acme.example
+          git -C "$FIXTURE" commit -q --allow-empty -m "docs checked" -m "Firelight-Covers: checked"
+          target/debug/firelight covers --strict --base "$base" "$FIXTURE" | tee "$RUNNER_TEMP/covers.txt"
+          grep -q '^checked: acme-infra/request-access' "$RUNNER_TEMP/covers.txt"
+      - name: Run the action again (acknowledged, so it passes)
+        uses: ./action # zizmor: ignore[self-repository]
+        with:
+          version: v0.0.0
+          binary: target/debug/firelight
+          directory: ${{ env.FIXTURE }}
       - name: A repo whose golden question expects another repo's entry
         run: |
           set -eu

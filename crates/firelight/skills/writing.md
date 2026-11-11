@@ -10,8 +10,11 @@ All three want the same thing: the right answer, fast, and true.
 - Title: the name people use. `aliases`: the other names, abbreviations and
   the words in other languages people type.
 - `summary`: one sentence a stranger understands. It is what search shows.
-- `covers`: the paths this concept describes (`terraform/access/**`). When
-  they change without the entry, `firelight covers` flags it in the PR.
+- `covers`: the paths this concept describes (`terraform/access/**`). Set it
+  on **every** entry that describes code or config: it is how docs stay true.
+  When those paths change without the entry, `firelight covers` fails the PR
+  until the entry is updated or a commit says
+  `Firelight-Covers: checked <repo>/<entry>` (see `firelight skills ci`).
 - 3 to 10 concepts per repo is plenty. Link related ones with `related`.
 
 ## Guides (`guides/*.md`)
@@ -19,6 +22,8 @@ All three want the same thing: the right answer, fast, and true.
 - The tasks people ask about, as steps: "Request access rights", "Deploy a
   hotfix". Title them as the task.
 - Start with when to use it, then numbered steps, then what it does not do.
+- `covers`: the code and config the steps depend on (`deploy/**`,
+  `Dockerfile`), like concepts.
 - Link the tools with `[the portal](link:access-portal)` and other entries
   with `[the model](entry:access-model)`, so links stay right when URLs move.
 
