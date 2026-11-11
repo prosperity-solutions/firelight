@@ -638,6 +638,9 @@ jobs:
           version: v0.0.0
           binary: target/debug/firelight
           directory: ${{ env.APP_REPO }}
+          # APP_REPO is a copy, not a git repo: covers can't tell (exit 2),
+          # which the opt-out turns into a warning (tests strict-covers: false).
+          strict-covers: "false"
           also: |
             fixtures/acme-infra
 
